@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Dosarul pacientului | Therapeutica</title>
+</head>
+<body>
+<div layout:fragment="content"
+     class="max-w-7xl w-full mx-auto px-4 py-8 space-y-6">
+
+    <div class="flex flex-wrap justify-between items-center gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-brand-navy">Dosar medical</h1>
+            <p class="mt-2 text-gray-600"
+               th:text="${pacientUser.nume + ' ' + pacientUser.prenume}"></p>
+        </div>
+
+        <a th:href="@{/medic/{medicId}/pacient/{pacientId}(
+                medicId=${medicId},
+                pacientId=${pacient.id}
+           )}"
+           class="px-4 py-2 bg-white border border-gray-200 rounded-lg font-bold">
+            Înapoi la profil
+        </a>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="bg-gray-100 text-brand-navy">
+            <tr>
+                <th scope="col" class="px-5 py-4">Document</th>
+                <th scope="col" class="px-5 py-4">Data încărcării</th>
+                <th scope="col" class="px-5 py-4">Acțiuni</th>
+            </tr>
+            </thead>
+
+            <tbody class="divide-y divide-gray-100">
+            <tr th:each="doc : ${documente}">
+                <td class="px-5 py-4 font-medium" th:text="${doc.numeFisier}"></td>
+                <td class="px-5 py-4"
+                    th:text="${doc.dataIncarcare != null
+                        ? #temporals.format(doc.dataIncarcare, 'dd.MM.yyyy HH:mm')
+                        : '—'}"></td>
+                <td class="px-5 py-4">
+                    <a th:href="@{/documente/{id}/sursa(id=${doc.id})}"
+                       class="text-brand-blue font-bold underline">
+                        Deschide
+                    </a>
+                </td>
+            </tr>
+
+            <tr th:if="${#lists.isEmpty(documente)}">
+                <td colspan="3" class="px-5 py-10 text-center text-gray-600">
+                    Pacientul nu are documente disponibile.
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+</div>
+</body>
+</html>

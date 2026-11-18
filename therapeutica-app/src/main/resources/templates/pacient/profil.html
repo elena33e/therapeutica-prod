@@ -1,0 +1,347 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Profil Pacient - Therapeutica</title>
+</head>
+<body class="bg-gray-50">
+
+<div layout:fragment="content" class="container mx-auto px-4 py-12 max-w-7xl">
+
+    <!-- Header & Acțiuni -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-brand-navy">
+                <span th:if="${mode == 'view'}">Profilul meu</span>
+                <span th:if="${mode == 'edit'}">Editare Profil Pacient</span>
+            </h1>
+            <p class="text-brand-navy/70 mt-2 font-medium">
+                <span th:if="${mode == 'view'}">Informațiile tale personale și dosarul medical</span>
+                <span th:if="${mode == 'edit'}">Actualizează datele pentru dosarul tău medical</span>
+            </p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Buton View -->
+            <a th:if="${mode == 'view'}"
+               th:href="@{'/pacient/profil/' + ${pacientId} + '/editare'}"
+               class="bg-brand-navy hover:bg-brand-navy/90 text-white font-bold py-2.5 px-5 rounded-lg transition duration-200 shadow-sm flex items-center">
+                <i class="fas fa-edit mr-2 text-brand-gold"></i> Editare profil
+            </a>
+
+            <!-- Butoane Edit -->
+            <div th:if="${mode == 'edit'}" class="flex gap-3">
+                <a th:href="@{'/pacient/profil/' + ${pacientId}}"
+                   class="bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-bold py-2.5 px-5 rounded-lg transition duration-200 shadow-sm">
+                    Anulare
+                </a>
+                <button type="submit" form="profilForm"
+                        class="bg-brand-teal hover:bg-brand-teal/90 text-white font-bold py-2.5 px-5 rounded-lg transition duration-200 shadow-sm flex items-center">
+                    <i class="fas fa-save mr-2"></i> Salvează
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Mesaj Succes -->
+    <div th:if="${successMessage}" class="mb-6 p-4 bg-brand-teal text-white font-bold rounded-xl flex items-center shadow-md max-w-4xl">
+        <i class="fas fa-check-circle mr-3 text-lg"></i>
+        <span th:text="${successMessage}"></span>
+    </div>
+
+    <!-- MOD EDITARE (Păstrat pe fundal deschis pentru lizibilitate optimă la tastare) -->
+    <form th:if="${mode == 'edit'}"
+          id="profilForm"
+          th:action="@{'/pacient/profil/' + ${pacientId} + '/salvare'}"
+          method="post"
+          class="space-y-6 max-w-4xl">
+
+        <!-- Card Informații Personale -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-xl font-bold text-brand-navy">
+                    <i class="fas fa-user mr-2 text-brand-blue"></i>
+                    Informații Personale
+                </h2>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Nume *</label>
+                    <input type="text" name="nume" th:value="${utilizator.nume}" required
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all font-medium text-brand-navy"
+                           th:classappend="${numeError != null} ? 'border-red-500'">
+                    <p th:if="${numeError}" class="text-red-500 text-sm mt-1 font-medium" th:text="${numeError}"></p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Prenume *</label>
+                    <input type="text" name="prenume" th:value="${utilizator.prenume}" required
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all font-medium text-brand-navy">
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Email *</label>
+                    <input type="email" name="email" th:value="${utilizator.email}" required
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none transition-all font-medium text-brand-navy">
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Date Medicale -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-200 bg-brand-teal/5">
+                <h2 class="text-xl font-bold text-brand-navy">
+                    <i class="fas fa-notes-medical mr-2 text-brand-teal"></i>
+                    Date Biometrice & Istoric
+                </h2>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="md:col-span-2">
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">CNP (13 cifre)</label>
+                    <input type="text" name="cnp" th:value="${pacient.cnp}" maxlength="13"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-mono font-medium text-brand-navy">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Sex</label>
+                    <select name="sex" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-medium text-brand-navy appearance-none">
+                        <option th:each="s : ${T(com.therapeutica.therapeutica_app.pacienti.Sex).values()}"
+                                th:value="${s.name()}" th:text="${s.numeAfisat}"
+                                th:selected="${pacient.sex == s}"></option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Data Nașterii</label>
+                    <input type="date" name="dataNasterii" th:value="${pacient.dataNasterii}"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-medium text-brand-navy">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Înălțime (cm)</label>
+                    <input type="number" name="inaltime" th:value="${pacient.inaltime}" placeholder="Ex: 175"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-medium text-brand-navy">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Greutate (kg)</label>
+                    <input type="number" step="0.1" name="greutate" th:value="${pacient.greutate}" placeholder="Ex: 70.5"
+                           class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-medium text-brand-navy">
+                </div>
+
+                <div class="md:col-span-3">
+                    <label class="block text-sm font-bold text-gray-600 mb-2 uppercase tracking-wide">Grupa Sangvină</label>
+                    <select name="grupaSangvina" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-blue focus:border-brand-blue outline-none font-medium text-brand-navy appearance-none">
+                        <option value="">Nespecificat</option>
+                        <option th:each="g : ${ {'0 (I) Rh+', '0 (I) Rh-', 'A (II) Rh+', 'A (II) Rh-', 'B (III) Rh+', 'B (III) Rh-', 'AB (IV) Rh+', 'AB (IV) Rh-'} }"
+                                th:value="${g}" th:text="${g}" th:selected="${pacient.grupaSangvina == g}"></option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    <!-- MOD VIZUALIZARE -->
+    <div th:if="${mode == 'view'}" class="space-y-6 max-w-4xl">
+
+        <!-- Card Date Identitate -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+                <h2 class="text-xl font-bold text-brand-navy">
+                    <i class="fas fa-id-card mr-2 text-brand-blue"></i>
+                    Date Identitate
+                </h2>
+                <div class="w-10 h-10 bg-brand-teal rounded-full flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                    <span th:text="${#strings.substring(utilizator.nume, 0, 1) + #strings.substring(utilizator.prenume, 0, 1)}"></span>
+                </div>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Nume Complet</p>
+                    <p class="text-lg font-bold text-brand-navy" th:text="${utilizator.prenume + ' ' + utilizator.nume}"></p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Email</p>
+                    <p class="text-lg font-medium text-brand-navy" th:text="${utilizator.email}"></p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Cod Numeric Personal</p>
+                    <p class="text-lg font-mono font-bold text-brand-navy" th:text="${pacient.cnp ?: 'Nespecificat'}"></p>
+                </div>
+
+                <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex justify-between items-center">
+                    <div>
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Vârstă</p>
+                        <p class="text-lg font-bold text-brand-navy" th:text="${pacient.dataNasterii != null ? pacient.getVarsta() + ' ani' : '-'}"></p>
+                    </div>
+                    <div class="h-10 w-px bg-gray-200"></div>
+                    <div class="text-right">
+                        <p class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Sex</p>
+                        <p class="text-lg font-bold text-brand-navy" th:text="${pacient.sex != null ? pacient.sex.numeAfisat : '-'}"></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Date Biometrice (Fundaluri colorate pastelate) -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-6 py-5 border-b border-gray-200 bg-gray-50">
+                <h2 class="text-xl font-bold text-brand-navy">
+                    <i class="fas fa-heartbeat mr-2 text-red-500"></i>
+                    Date Biometrice
+                </h2>
+            </div>
+
+            <div class="p-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
+                <!-- Înălțime (Blue) -->
+                <div class="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col items-center justify-center text-center">
+                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fas fa-ruler-vertical text-brand-blue"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-blue-500/80 uppercase tracking-widest mb-1">Înălțime</p>
+                    <p class="text-xl font-black text-brand-navy" th:text="${pacient.inaltime != null ? pacient.inaltime + ' cm' : '-'}"></p>
+                </div>
+
+                <!-- Greutate (Teal) -->
+                <div class="bg-teal-50 p-4 rounded-xl border border-teal-100 flex flex-col items-center justify-center text-center">
+                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fas fa-weight text-brand-teal"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-teal-600/80 uppercase tracking-widest mb-1">Greutate</p>
+                    <p class="text-xl font-black text-brand-navy" th:text="${pacient.greutate != null ? pacient.greutate + ' kg' : '-'}"></p>
+                </div>
+
+                <!-- Grupă Sânge (Red) -->
+                <div class="bg-red-50 p-4 rounded-xl border border-red-100 flex flex-col items-center justify-center text-center">
+                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fas fa-tint text-red-500"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-red-500/80 uppercase tracking-widest mb-1">Grupă</p>
+                    <p class="text-xl font-black text-brand-navy" th:text="${pacient.grupaSangvina ?: '-'}"></p>
+                </div>
+
+                <!-- IMC Calculator (Yellow/Amber) -->
+                <div class="bg-amber-50 p-4 rounded-xl border border-amber-100 flex flex-col items-center justify-center text-center">
+                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center mb-2 shadow-sm">
+                        <i class="fas fa-calculator text-amber-500"></i>
+                    </div>
+                    <p class="text-[10px] font-bold text-amber-600/80 uppercase tracking-widest mb-1">IMC</p>
+
+                    <div th:if="${pacient.inaltime != null && pacient.greutate != null}" class="flex flex-col items-center">
+                        <p class="text-xl font-black text-brand-navy"
+                           th:with="h=${pacient.inaltime/100.0}"
+                           th:text="${#numbers.formatDecimal(pacient.greutate/(h*h), 1, 1)}"></p>
+
+                        <span class="mt-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest text-white shadow-sm"
+                              th:with="h=${pacient.inaltime/100.0}, imc=${pacient.greutate/(h*h)}"
+                              th:classappend="${imc < 18.5 ? 'bg-brand-blue' : (imc < 25 ? 'bg-brand-teal' : (imc < 30 ? 'bg-brand-gold text-brand-navy' : 'bg-red-500'))}"
+                              th:text="${imc < 18.5 ? 'Subpond.' : (imc < 25 ? 'Normal' : (imc < 30 ? 'Suprapond.' : 'Obezitate'))}">
+                        </span>
+                    </div>
+                    <div th:unless="${pacient.inaltime != null && pacient.greutate != null}">
+                        <p class="text-xl font-black text-amber-500/50">-</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card Medic Responsabil (Fundal Navy Solid) -->
+        <div class="bg-brand-navy rounded-2xl shadow-md border border-brand-navy overflow-hidden relative">
+            <!-- Icon decorativ în fundal -->
+            <i class="fas fa-user-md absolute -right-6 -bottom-6 text-9xl text-white opacity-5 pointer-events-none"></i>
+
+            <div class="px-6 py-5 border-b border-white/10 bg-white/5">
+                <h2 class="text-xl font-bold text-white">
+                    <i class="fas fa-stethoscope mr-2 text-brand-gold"></i>
+                    Medic Responsabil
+                </h2>
+            </div>
+
+            <div class="p-6 relative z-10">
+                <!-- Dacă există medic -->
+                <div th:if="${pacient != null && pacient.medic != null}" class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                    <div class="space-y-4">
+                        <div>
+                            <p class="text-xs font-bold text-brand-gold uppercase tracking-widest mb-1">Medic Curant</p>
+                            <h3 class="text-3xl font-bold text-white tracking-tight"
+                                th:text="${'Dr. ' + (pacient.medic.user?.prenume ?: '') + ' ' + (pacient.medic.user?.nume ?: 'Nespecificat')}">
+                            </h3>
+                        </div>
+
+                        <div class="space-y-2">
+                            <p class="text-white/80 font-medium text-sm flex items-center">
+                                <i class="fas fa-envelope mr-3 w-4 text-center text-white/50"></i>
+                                <span th:text="${pacient.medic.user?.email ?: 'Email indisponibil'}"></span>
+                            </p>
+                            <p class="text-white/80 font-medium text-sm flex items-center">
+                                <i class="fas fa-phone mr-3 w-4 text-center text-white/50"></i>
+                                <span th:text="${pacient.medic.telefon ?: 'Telefon indisponibil'}"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Butoane de Contact -->
+                    <div class="flex">
+                        <a th:if="${whatsappLinkMedic != null}"
+                           th:href="${whatsappLinkMedic}"
+                           target="_blank"
+                           class="bg-[#25D366] hover:bg-[#20ba5a] text-white py-3 px-6 rounded-xl font-bold text-sm transition-colors inline-flex items-center shadow-lg transform hover:-translate-y-0.5 duration-200">
+                            <i class="fab fa-whatsapp mr-2 text-xl"></i>
+                            Contactează
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Dacă nu există medic -->
+                <div th:if="${pacient == null || pacient.medic == null}"
+                     class="text-center py-10 bg-white/5 rounded-xl border border-dashed border-white/20">
+                    <div class="mx-auto w-16 h-16 mb-4 bg-white/10 rounded-full flex items-center justify-center">
+                        <i class="fas fa-user-md text-3xl text-white/50"></i>
+                    </div>
+                    <h3 class="text-lg font-bold text-white mb-2">Fără medic alocat</h3>
+                    <p class="text-white/60 max-w-sm mx-auto font-medium">
+                        Contul dumneavoastră nu este încă asociat unui medic responsabil în platformă.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<div layout:fragment="scripts">
+    <script th:inline="javascript">
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('profilForm');
+            if (!form) return;
+
+            const cnpInput = form.querySelector('input[name="cnp"]');
+            cnpInput?.addEventListener('input', function() {
+                this.value = this.value.replace(/[^0-9]/g, '');
+                if (this.value.length > 0 && this.value.length !== 13) {
+                    this.classList.add('border-red-500', 'focus:border-red-500', 'focus:ring-red-100');
+                    this.classList.remove('focus:border-brand-blue', 'focus:ring-brand-blue');
+                } else {
+                    this.classList.remove('border-red-500', 'focus:border-red-500', 'focus:ring-red-100');
+                    this.classList.add('focus:border-brand-blue', 'focus:ring-brand-blue');
+                }
+            });
+
+            const cancelBtn = document.querySelector('a[href*="/pacient/profil/"]:not([href*="/editare"])');
+            cancelBtn?.addEventListener('click', function(e) {
+                const hasChanges = Array.from(form.querySelectorAll('input, select')).some(i => i.value !== i.defaultValue);
+                if (hasChanges && !confirm('Ai modificări nesalvate. Ești sigur că vrei să anulezi?')) {
+                    e.preventDefault();
+                }
+            });
+        });
+    </script>
+</div>
+</body>
+</html>

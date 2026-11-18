@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="'Dashboard - ' + ${medicNumeComplet}">Dashboard Medic</title>
+    <div layout:fragment="head">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    </div>
+</head>
+<body>
+<div layout:fragment="content">
+    <div class="container mx-auto px-4 py-12 max-w-7xl">
+        <!-- Welcome Message -->
+        <div class="mb-10">
+            <h1 class="text-3xl font-bold text-brand-navy">
+                Bună ziua,
+                <span class="text-brand-teal" th:text="${medicNumeComplet}">Dr. Medic</span>!
+            </h1>
+            <p class="text-brand-navy/70 mt-2 font-medium">
+                <i class="fas fa-hospital mr-2 text-brand-blue"></i>
+                Panoul tău personalizat de control medical
+            </p>
+        </div>
+
+        <!-- Quick Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+            <!-- Card: Coduri generate -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-navy/20 relative overflow-hidden">
+                <div class="absolute right-0 top-0 w-16 h-16 bg-brand-navy/5 rounded-bl-full z-0"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <p class="text-sm text-brand-navy/60 font-semibold uppercase tracking-wider">Coduri generate</p>
+                        <p class="text-3xl font-black text-brand-navy mt-1" th:text="${coduriGenerate}">0</p>
+                    </div>
+                    <i class="fas fa-key text-brand-navy/30 text-3xl"></i>
+                </div>
+                <p class="text-xs text-brand-navy/60 mt-3 font-medium relative z-10">
+                    <span th:text="${coduriActive}" class="font-bold text-brand-teal">0</span> active
+                </p>
+            </div>
+
+            <!-- Card: Pacienți -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-teal/40 relative overflow-hidden">
+                <div class="absolute right-0 top-0 w-16 h-16 bg-brand-teal/10 rounded-bl-full z-0"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <p class="text-sm text-brand-navy/60 font-semibold uppercase tracking-wider">Pacienți</p>
+                        <p class="text-3xl font-black text-brand-navy mt-1" th:text="${numarPacienti}">0</p>
+                    </div>
+                    <i class="fas fa-user-injured text-brand-teal/50 text-3xl"></i>
+                </div>
+                <p class="text-xs text-brand-navy/60 mt-3 font-medium relative z-10">
+                    Pacienți asociați
+                </p>
+            </div>
+
+            <!-- Card: Chestionare atribuite -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-gold/60 relative overflow-hidden">
+                <div class="absolute right-0 top-0 w-16 h-16 bg-brand-gold/20 rounded-bl-full z-0"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <p class="text-sm text-brand-navy/60 font-semibold uppercase tracking-wider">Chestionare</p>
+                        <p class="text-3xl font-black text-brand-navy mt-1" th:text="${numarChestionareAtribuite}">0</p>
+                    </div>
+                    <i class="fas fa-clipboard-check text-brand-gold text-3xl"></i>
+                </div>
+                <p class="text-xs text-brand-navy/60 mt-3 font-medium relative z-10">
+                    <span th:text="${numarChestionareNecompletate}" class="font-bold text-red-500">0</span> necompletate
+                </p>
+            </div>
+
+            <!-- Card: Chestionare completate -->
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-brand-blue/40 relative overflow-hidden">
+                <div class="absolute right-0 top-0 w-16 h-16 bg-brand-blue/10 rounded-bl-full z-0"></div>
+                <div class="flex items-center justify-between relative z-10">
+                    <div>
+                        <p class="text-sm text-brand-navy/60 font-semibold uppercase tracking-wider">Completate</p>
+                        <p class="text-3xl font-black text-brand-navy mt-1" th:text="${numarChestionareCompletate}">0</p>
+                    </div>
+                    <i class="fas fa-check-circle text-brand-blue/50 text-3xl"></i>
+                </div>
+                <p class="text-xs text-brand-navy/60 mt-3 font-medium relative z-10">
+                    Chestionare finalizate
+                </p>
+            </div>
+        </div>
+
+        <!-- Action Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+            <!-- Generare Cod Card -->
+            <a th:href="@{/generare-cod}"
+               class="bg-white p-6 rounded-xl shadow-sm border border-brand-navy/20 hover:border-brand-navy hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+                <div class="flex flex-col items-center text-center">
+                    <div class="bg-brand-navy/5 group-hover:bg-brand-navy/10 p-4 rounded-full mb-4 transition-colors">
+                        <i class="fas fa-key text-brand-navy text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-brand-navy mb-2">Generează Cod</h3>
+                    <p class="text-brand-navy/60 text-sm">Coduri pentru pacienți noi</p>
+                </div>
+            </a>
+
+            <!-- Atribuire chestionare Card -->
+            <a th:href="@{/chestionare/medic/lista-chestionare}"
+               class="bg-white p-6 rounded-xl shadow-sm border border-brand-teal/40 hover:border-brand-teal hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+                <div class="flex flex-col items-center text-center">
+                    <div class="bg-brand-teal/10 group-hover:bg-brand-teal/20 p-4 rounded-full mb-4 transition-colors">
+                        <i class="fas fa-clipboard-list text-brand-navy text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-brand-navy mb-2">Atribuie Chestionar</h3>
+                    <p class="text-brand-navy/60 text-sm">Trimite chestionare pacienților</p>
+                </div>
+            </a>
+
+            <!-- Listă Coduri Card -->
+            <a th:href="@{'/medic/' + ${session.userId} + '/pacienti'}"
+               class="bg-white p-6 rounded-xl shadow-sm border border-brand-gold/60 hover:border-brand-gold hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+                <div class="flex flex-col items-center text-center">
+                    <div class="bg-brand-gold/30 group-hover:bg-brand-gold/50 p-4 rounded-full mb-4 transition-colors">
+                        <i class="fas fa-users text-brand-navy text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-brand-navy mb-2">Pacienții mei</h3>
+                    <p class="text-brand-navy/60 text-sm">Vezi lista pacineților</p>
+                </div>
+            </a>
+
+            <!-- Profil Card -->
+            <a th:href="@{'/medic/profil/' + ${session.userId}}"
+               class="bg-white p-6 rounded-xl shadow-sm border border-brand-blue/40 hover:border-brand-blue hover:shadow-md hover:-translate-y-1 transition-all duration-300 group">
+                <div class="flex flex-col items-center text-center">
+                    <div class="bg-brand-blue/15 group-hover:bg-brand-blue/25 p-4 rounded-full mb-4 transition-colors">
+                        <i class="fas fa-user-md text-brand-navy text-2xl"></i>
+                    </div>
+                    <h3 class="font-bold text-lg text-brand-navy mb-2">Profilul meu</h3>
+                    <p class="text-brand-navy/60 text-sm">Gestionează profilul medical</p>
+                </div>
+            </a>
+        </div>
+
+    </div>
+</div>
+
+<div layout:fragment="scripts">
+
+</div>
+</body>
+</html>

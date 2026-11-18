@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Atribuire chestionar nou | Therapeutica</title>
+</head>
+<body>
+
+<div layout:fragment="content" class="container mx-auto px-4 py-12 max-w-7xl">
+
+    <div class="mb-10">
+        <h1 class="text-3xl font-bold text-brand-navy">Atribuie chestionar nou</h1>
+        <p class="text-gray-500 mt-2 font-medium">
+            Selectați chestionarele pe care doriți să le atribuiți pacientului
+            <span class="font-bold text-brand-navy">
+                <span th:text="${pacientUser.nume}"></span>
+                <span th:text="${pacientUser.prenume}"></span>
+            </span>.
+        </p>
+    </div>
+
+    <div th:if="${error}" class="mb-8 p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center shadow-sm">
+        <i class="fas fa-exclamation-triangle mr-3 text-lg"></i>
+        <span class="font-bold" th:text="${error}"></span>
+    </div>
+
+    <form th:action="@{'/medic/pacienti/' + ${pacient.id} + '/atribuire'}"
+          method="post"
+          id="atribuireForm">
+
+        <input type="hidden" name="medicId" th:value="${medic.userId}">
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-gray-200 bg-gray-50">
+                        <h2 class="text-xl font-bold text-brand-navy flex items-center">
+                            <i class="fas fa-clipboard-list text-brand-gold mr-3"></i>
+                            Chestionare disponibile
+                        </h2>
+                    </div>
+
+                    <div class="p-6">
+                        <div th:if="${chestionareDisponibile != null and !chestionareDisponibile.isEmpty()}">
+                            <div class="space-y-4">
+                                <div th:each="chestionar, iterStat : ${chestionareDisponibile}"
+                                     class="border border-gray-200 rounded-xl p-5 hover:border-brand-teal transition bg-white group">
+                                    <div class="flex items-start">
+                                        <div class="flex items-center h-5 mr-4 mt-0.5">
+                                            <input type="checkbox"
+                                                   th:id="'chestionar_' + ${chestionar.id}"
+                                                   th:value="${chestionar.id}"
+                                                   name="chestionareIds"
+                                                   class="h-5 w-5 text-brand-teal rounded border-gray-300 focus:ring-brand-teal cursor-pointer">
+                                        </div>
+                                        <div class="flex-1">
+                                            <label th:for="'chestionar_' + ${chestionar.id}" class="cursor-pointer block">
+                                                <h3 class="font-bold text-lg text-brand-navy mb-1" th:text="${chestionar.nume}"></h3>
+                                                <p class="text-sm text-gray-500" th:text="${chestionar.descriere}"></p>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sticky top-24">
+                    <h3 class="font-bold text-brand-navy mb-5">Confirmare acțiune</h3>
+                    <button type="button"
+                            onclick="submitAtribuire()"
+                            id="submitButton"
+                            class="w-full bg-brand-teal hover:bg-brand-teal/90 text-white font-bold py-3 px-4 rounded-xl transition shadow-md flex items-center justify-center">
+                        <i class="fas fa-paper-plane mr-2"></i>
+                        <span>Atribuie chestionare</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div layout:fragment="scripts">
+    <script>
+        function submitAtribuire() {
+            const form = document.getElementById('atribuireForm');
+            // Căutăm explicit după name="chestionareIds"
+            const checkboxes = form.querySelectorAll('input[name="chestionareIds"]:checked');
+
+            if (checkboxes.length === 0) {
+                alert('Vă rugăm să selectați cel puțin un chestionar!');
+                return;
+            }
+
+            if (confirm('Confirmați atribuirea chestionarelor selectate?')) {
+                const btn = document.getElementById('submitButton');
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i>Se procesează...';
+                form.submit();
+            }
+        }
+    </script>
+</div>
+
+</body>
+</html>

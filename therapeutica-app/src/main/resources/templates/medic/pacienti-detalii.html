@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      xmlns:x-transition="http://www.w3.org/1999/xhtml"
+      layout:decorate="~{layout}">
+<head>
+    <title th:text="${pacientUser.nume + ' ' + pacientUser.prenume}">Detalii Pacient | Therapeutica</title>
+</head>
+<body class="bg-gray-50">
+
+<div layout:fragment="content" class="min-h-screen pb-20">
+
+    <div class="bg-white border-b border-gray-200 sticky top-0 z-40 px-6 py-4 shadow-sm">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
+            <div class="flex items-center space-x-4">
+                <div class="bg-brand-teal p-3 rounded-xl shadow-md">
+                    <i class="fas fa-user text-white text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-brand-navy leading-none">
+                        <span th:text="${pacientUser.nume}"></span> <span th:text="${pacientUser.prenume}"></span>
+                    </h1>
+                    <div class="flex items-center mt-2 space-x-3 text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                        <span><i class="far fa-id-card mr-1 text-brand-navy"></i> <span th:text="${pacient.cnp}"></span></span>
+                        <span class="w-1.5 h-1.5 bg-gray-300 rounded-full"></span>
+                        <span><i class="far fa-envelope mr-1 text-brand-navy"></i> <span th:text="${pacientUser.email}"></span></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <a th:href="@{'/medic/analize/dosar/' + ${pacient.id}}"
+                   class="px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-brand-navy hover:bg-gray-200 transition-all flex items-center shadow-sm">
+                    <i class="fas fa-microscope mr-2 text-brand-blue"></i> Documente
+                </a>
+                <a th:href="@{'/medic/pacienti/' + ${pacient.id} + '/atribuire-nou'}"
+                   class="px-4 py-2.5 bg-gray-100 border border-gray-200 rounded-xl text-xs font-bold text-brand-navy hover:bg-gray-200 transition-all flex items-center shadow-sm">
+                    <i class="fas fa-plus-circle mr-2 text-brand-teal"></i> Atribuie
+                </a>
+
+            </div>
+        </div>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-6 mt-8 space-y-6">
+        <div th:if="${success}" class="p-4 bg-brand-teal text-white rounded-xl flex items-center shadow-md">
+            <i class="fas fa-check-circle mr-3 text-white text-lg"></i>
+            <span class="text-sm font-bold" th:text="${success}"></span>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="bg-white p-7 rounded-2xl shadow-sm border border-gray-200 flex flex-col justify-between">
+                <div>
+                    <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Evaluări Chestionare</h3>
+                    <div class="flex items-baseline gap-2 mb-6">
+                        <span class="text-5xl font-black text-brand-navy" th:text="${totalChestionareCompletate + totalChestionareNecompletate}">0</span>
+                        <span class="text-gray-400 font-bold text-[10px] uppercase tracking-tighter">Total</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="bg-brand-teal p-3 rounded-xl shadow-sm text-center">
+                        <p class="text-[9px] font-bold text-white/80 uppercase mb-1">Finalizate</p>
+                        <p class="text-xl font-bold text-white" th:text="${totalChestionareCompletate}">0</p>
+                    </div>
+                    <div class="bg-brand-gold p-3 rounded-xl shadow-sm text-center">
+                        <p class="text-[9px] font-bold text-brand-navy/70 uppercase mb-1">Restante</p>
+                        <p class="text-xl font-bold text-brand-navy" th:text="${totalChestionareNecompletate}">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 bg-white p-7 rounded-2xl shadow-sm border border-gray-200 relative overflow-hidden">
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between mb-8">
+                        <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Date Biometrice Pacient</h3>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="p-4 rounded-xl bg-gray-100 border border-gray-200">
+                            <p class="text-[9px] text-gray-500 uppercase font-bold mb-2 tracking-tight">Vârstă</p>
+                            <p class="text-lg font-bold text-brand-navy" th:text="${pacient.varsta > 0 ? pacient.varsta + ' ani' : '-'}"></p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-gray-100 border border-gray-200">
+                            <p class="text-[9px] text-gray-500 uppercase font-bold mb-2 tracking-tight">Sex</p>
+                            <p class="text-lg font-bold text-brand-navy flex items-center">
+                                <span th:text="${pacient.sex?.name() ?: 'N/A'}"></span>
+                            </p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-gray-100 border border-gray-200">
+                            <p class="text-[9px] text-gray-500 uppercase font-bold mb-2 tracking-tight">Înălțime</p>
+                            <p class="text-lg font-bold text-brand-navy"><span th:text="${pacient.inaltime ?: '-'}"></span> cm</p>
+                        </div>
+                        <div class="p-4 rounded-xl bg-gray-100 border border-gray-200">
+                            <p class="text-[9px] text-gray-500 uppercase font-bold mb-2 tracking-tight">Greutate</p>
+                            <p class="text-lg font-bold text-brand-navy"><span th:text="${pacient.greutate ?: '-'}"></span> kg</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden" x-data="{ activeTab: 'completate' }">
+            <div class="px-8 py-5 border-b border-gray-200 flex flex-col md:flex-row justify-between items-center bg-gray-50 gap-4">
+                <div class="flex p-1 bg-gray-200 rounded-xl">
+                    <button @click="activeTab = 'completate'" class="px-6 py-2.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-widest" :class="activeTab === 'completate' ? 'bg-brand-navy text-white shadow-md' : 'text-gray-600'">
+                        Finalizate (<span th:text="${totalChestionareCompletate}">0</span>)
+                    </button>
+                    <button @click="activeTab = 'necompletate'" class="px-6 py-2.5 text-[10px] font-bold rounded-lg transition-all uppercase tracking-widest" :class="activeTab === 'necompletate' ? 'bg-brand-navy text-white shadow-md' : 'text-gray-600'">
+                        În așteptare (<span th:text="${totalChestionareNecompletate}">0</span>)
+                    </button>
+                </div>
+            </div>
+
+            <div x-show="activeTab === 'completate'" class="overflow-x-auto">
+                <table class="w-full text-left" th:if="${totalChestionareCompletate > 0}">
+                    <thead>
+                    <tr class="text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                        <th class="px-8 py-4">Chestionar</th>
+                        <th class="px-8 py-4">Data Completării</th>
+                        <th class="px-8 py-4 text-center">Scor</th>
+                        <th class="px-8 py-4 text-right">Acțiuni</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                    <tr th:each="rc : ${chestionareCompletate}" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-8 py-5 text-sm font-bold text-brand-navy" th:text="${rc.numeChestionar ?: 'Nume indisponibil'}"></td>
+                        <td class="px-8 py-5 text-sm text-gray-500 font-medium"
+                            th:text="${rc.completatLa != null ? #temporals.format(rc.completatLa, 'dd MMM yyyy · HH:mm') : '-'}"></td>
+                        <td class="px-8 py-5 text-center">
+                            <span th:if="${rc.scorTotalGeneral != null}"
+                                  class="inline-flex px-3 py-1 rounded-lg text-xs font-bold bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
+                                <span th:text="${rc.scorTotalGeneral}"></span> pct.
+                            </span>
+                            <span th:if="${rc.scorTotalGeneral == null}" class="text-xs font-semibold text-gray-400 italic">
+                                Necesită analiză
+                            </span>
+                        </td>
+                        <td class="px-8 py-5 text-right">
+                            <a th:href="@{'/chestionare/medic/vizualizare/' + ${rc.id}}"
+                               class="inline-flex items-center text-xs font-bold text-brand-blue hover:text-brand-navy bg-white border border-gray-200 hover:border-brand-blue/40 px-4 py-2 rounded-lg transition-all shadow-sm">
+                                Vezi Rezultate
+                            </a>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <div th:if="${totalChestionareCompletate == 0}" class="text-center py-20">
+                    <i class="fas fa-clipboard text-gray-200 text-5xl mb-4"></i>
+                    <h3 class="text-lg font-bold text-brand-navy">Niciun istoric</h3>
+                    <p class="text-sm text-gray-400 mt-1">Pacientul nu a finalizat evaluările atribuite.</p>
+                </div>
+            </div>
+
+            <div x-show="activeTab === 'necompletate'" class="overflow-x-auto" style="display: none;">
+                <table class="w-full text-left" th:if="${totalChestionareNecompletate > 0}">
+                    <thead>
+                    <tr class="text-[10px] font-bold text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                        <th class="px-8 py-4">Chestionar Atribuit</th>
+                        <th class="px-8 py-4 text-center">Status</th>
+                        <th class="px-8 py-4 text-right">Acțiuni</th>
+                    </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                    <tr th:each="rn : ${chestionareNecompletate}" class="hover:bg-gray-50 transition-colors">
+                        <td class="px-8 py-5 text-sm font-bold text-brand-navy" th:text="${rn.numeChestionar ?: 'Nume indisponibil'}">Nume</td>
+                        <td class="px-8 py-5 text-center">
+                            <span class="px-3 py-1 bg-brand-gold/20 text-brand-navy text-xs font-bold rounded-full border border-brand-gold/40">
+                                Restant
+                            </span>
+                        </td>
+                        <td class="px-8 py-5 text-right">
+                            <button class="inline-flex items-center text-xs font-bold text-gray-500 hover:text-brand-navy transition-colors">
+                                <i class="fas fa-bell mr-1.5"></i> Trimite Memento
+                            </button>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+
+                <div th:if="${totalChestionareNecompletate == 0}" class="text-center py-20">
+                    <i class="fas fa-check-circle text-gray-200 text-5xl mb-4"></i>
+                    <h3 class="text-lg font-bold text-brand-navy">La zi</h3>
+                    <p class="text-sm text-gray-400 mt-1">Pacientul a completat toate sarcinile active.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+            <div class="px-8 py-5 border-b border-gray-200 bg-gray-50">
+                <h3 class="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Istoric Diagnostice Stabilite de Medic</h3>
+            </div>
+
+            <div th:if="${istoricDiagnostice != null and !istoricDiagnostice.isEmpty()}" class="px-8 py-8">
+                <div class="relative pl-8">
+                    <!-- Linia verticală a timeline-ului -->
+                    <div class="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200"></div>
+
+                    <div th:each="diag, stat : ${istoricDiagnostice}" class="relative pb-8 last:pb-0">
+                        <!-- Marker -->
+                        <div th:class="${stat.first} ? 'absolute -left-8 top-1 w-4 h-4 rounded-full bg-brand-teal border-4 border-white shadow-sm ring-1 ring-brand-teal'
+                                                      : 'absolute -left-8 top-1 w-4 h-4 rounded-full bg-white border-4 border-gray-200'"></div>
+
+                        <div class="bg-gray-50 border border-gray-200 rounded-xl p-5">
+                            <div class="flex items-start justify-between gap-4 mb-2">
+                                <p class="text-sm font-bold text-brand-navy" th:text="${diag.diagnosticFinal}"></p>
+                                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-widest whitespace-nowrap"
+                                      th:text="${diag.dataStabilire != null ? #temporals.format(diag.dataStabilire, 'dd MMM yyyy · HH:mm') : '-'}"></span>
+                            </div>
+                            <p th:if="${diag.observatiiClinice != null and !diag.observatiiClinice.isEmpty()}"
+                               class="text-sm text-gray-500 leading-relaxed" th:text="${diag.observatiiClinice}"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div th:if="${istoricDiagnostice == null or istoricDiagnostice.isEmpty()}" class="text-center py-20">
+                <i class="fas fa-stethoscope text-gray-200 text-5xl mb-4"></i>
+                <h3 class="text-lg font-bold text-brand-navy">Niciun diagnostic stabilit încă</h3>
+                <p class="text-sm text-gray-400 mt-1">Diagnosticele stabilite vor apărea aici după evaluarea clinică.</p>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Înregistrare Diagnostic -->
+    <div id="modalDiagnostic" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl border border-gray-100">
+            <h3 class="text-2xl font-bold text-brand-navy mb-6">Înregistrare Diagnostic</h3>
+
+            <form th:action="@{/diagnostic/salveaza}" method="post">
+                <input type="hidden" name="pacientId" th:value="${pacient.id}" />
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-500">Diagnostic Final</label>
+                        <input type="text" name="diagnosticFinal"
+                               class="w-full mt-1 p-3 border border-gray-200 rounded-xl"
+                               required placeholder="Ex: Hipoclorhidrie..." />
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold uppercase text-gray-500">Observații</label>
+                        <textarea name="observatiiClinice"
+                                  class="w-full mt-1 p-3 border border-gray-200 rounded-xl" rows="3"></textarea>
+                    </div>
+
+                    <div class="hidden" th:if="${chestionareCompletate != null}">
+                        <input th:each="chest : ${chestionareCompletate}" type="checkbox"
+                               name="chestionareIds" th:value="${chest.id}" checked />
+                    </div>
+                </div>
+
+                <div class="flex gap-3 mt-8">
+                    <button type="button"
+                            onclick="document.getElementById('modalDiagnostic').classList.add('hidden')"
+                            class="flex-1 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold">Anulează</button>
+                    <button type="submit"
+                            class="flex-1 py-3 bg-brand-teal text-white rounded-xl font-bold shadow-lg">Salvează Diagnostic</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="fixed bottom-8 right-8 z-50">
+        <button type="button"
+                onclick="document.getElementById('modalDiagnostic').classList.remove('hidden')"
+                class="flex items-center gap-2 bg-brand-navy text-white px-6 py-4 rounded-2xl shadow-2xl hover:bg-brand-navy/90 transition-all font-bold">
+            <i class="fas fa-stethoscope"></i>
+            <span>Stabilește Diagnostic</span>
+        </button>
+    </div>
+</div>
+</body>
+</html>

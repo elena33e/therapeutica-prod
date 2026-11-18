@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Pacienții mei - Therapeutica</title>
+</head>
+<body>
+
+<div layout:fragment="content" class="container mx-auto px-4 py-12 max-w-7xl">
+    <!-- Header -->
+    <div class="mb-8">
+        <h1 class="text-3xl font-bold text-brand-navy">Pacienții mei</h1>
+        <p class="text-brand-navy/70 mt-2 font-medium">Lista pacienților asociați dumneavoastră</p>
+    </div>
+
+    <!-- Mesaje flash -->
+    <div th:if="${success}" class="mb-6 p-4 bg-brand-teal/10 border border-brand-teal/40 text-brand-navy font-medium rounded-lg flex items-center shadow-sm">
+        <i class="fas fa-check-circle mr-2 text-brand-teal text-lg"></i>
+        <span th:text="${success}"></span>
+    </div>
+
+    <div th:if="${error}" class="mb-6 p-4 bg-red-50 border border-red-200 text-red-600 font-medium rounded-lg flex items-center shadow-sm">
+        <i class="fas fa-exclamation-circle mr-2 text-lg"></i>
+        <span th:text="${error}"></span>
+    </div>
+
+    <!-- Lista pacienți -->
+    <div class="bg-white rounded-xl shadow-sm border border-brand-navy/10 overflow-hidden">
+        <!-- Antet tabel -->
+        <div class="px-6 py-5 border-b border-brand-navy/10 bg-brand-navy/5">
+            <h2 class="text-xl font-bold text-brand-navy flex items-center">
+                <i class="fas fa-users mr-3 text-brand-gold"></i>
+                Pacienții asociați
+                <span class="ml-2 text-sm font-semibold text-brand-navy/50"
+                      th:text="'(' + ${pacienti.size()} + ' pacienți)'">
+                </span>
+            </h2>
+        </div>
+
+        <div th:if="${pacienti != null and !pacienti.isEmpty()}"
+             class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-brand-navy/5">
+                <thead class="bg-white">
+                <tr>
+                    <th class="px-6 py-4 text-left text-xs font-bold text-brand-navy/60 uppercase tracking-wider">
+                        Pacient
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-bold text-brand-navy/60 uppercase tracking-wider">
+                        Contact
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-bold text-brand-navy/60 uppercase tracking-wider">
+                        CNP
+                    </th>
+                    <th class="px-6 py-4 text-left text-xs font-bold text-brand-navy/60 uppercase tracking-wider">
+                        Acțiuni
+                    </th>
+                </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-brand-navy/5">
+                <tr th:each="pacient : ${pacienti}" class="hover:bg-brand-navy/5 transition-colors group">
+
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <!-- Avatar pacient -->
+                            <div class="flex-shrink-0 h-10 w-10 bg-brand-teal/10 border border-brand-teal/20 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user-injured text-brand-teal"></i>
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-bold text-brand-navy">
+                                    <span th:text="${pacient.user.nume}"></span>
+                                    <span th:text="${pacient.user.prenume}"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <div class="text-sm font-medium text-brand-navy/80" th:text="${pacient.user.email}"></div>
+                    </td>
+
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-brand-navy/60">
+                        <span th:text="${pacient.cnp} ?: '-'"></span>
+                    </td>
+
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <!-- Acțiune transformată în mini-buton pentru UX mai bun -->
+                        <a th:href="@{'/medic/' + ${medicId} + '/pacient/' + ${pacient.pacientId}}"
+                           class="inline-flex items-center text-brand-navy hover:text-brand-gold bg-brand-navy/5 hover:bg-brand-gold/10 px-3 py-1.5 rounded-lg transition-colors">
+                            <i class="fas fa-eye mr-2"></i>Vezi detalii
+                        </a>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Mesaj dacă nu există pacienți (Empty State reproiectat) -->
+        <div th:if="${pacienti == null or pacienti.isEmpty()}"
+             class="text-center py-16 bg-white">
+            <div class="mx-auto w-20 h-20 mb-6 bg-brand-navy/5 rounded-full flex items-center justify-center border border-brand-navy/10">
+                <i class="fas fa-users text-4xl text-brand-blue"></i>
+            </div>
+            <h3 class="text-xl font-bold text-brand-navy mb-2">
+                Nu aveți pacienți asociați
+            </h3>
+            <p class="text-brand-navy/60 mb-6 max-w-md mx-auto font-medium">
+                Pentru a putea atribui chestionare, trebuie să aveți pacienți asociați.
+            </p>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

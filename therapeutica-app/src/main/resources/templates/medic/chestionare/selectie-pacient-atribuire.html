@@ -1,0 +1,95 @@
+<!DOCTYPE HTML>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Selecție Pacient - Atribuire CDSS</title>
+</head>
+<body>
+<div layout:fragment="content" class="container mx-auto px-4 py-12 max-w-7xl">
+
+    <!-- Buton Înapoi -->
+    <div class="mb-8">
+        <a th:href="@{/chestionare/medic/lista-chestionare}" class="inline-flex items-center text-sm font-bold text-gray-500 hover:text-brand-navy transition-colors">
+            <i class="fas fa-chevron-left mr-2 text-xs"></i> Înapoi la lista de chestionare
+        </a>
+    </div>
+
+    <!-- Header Card -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-3xl font-bold text-brand-navy">Atribuire Chestionar</h1>
+            <p class="text-gray-500 mt-2 font-medium">
+                Selectați pacientul căruia doriți să îi atribuiți chestionarul:
+                <span class="text-brand-teal font-bold ml-1" th:text="${chestionar.nume}">Nume Chestionar</span>
+            </p>
+        </div>
+        <!-- Badge Solid -->
+        <div class="px-4 py-2 bg-brand-blue rounded-lg shadow-sm">
+            <span class="text-[10px] font-bold text-white uppercase tracking-widest flex items-center">
+                <i class="fas fa-file-medical mr-2 opacity-80"></i> Protocol Selectat
+            </span>
+        </div>
+    </div>
+
+    <!-- Container Tabel -->
+    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-left">
+                <thead class="bg-gray-100 border-b border-gray-200">
+                <tr>
+                    <th scope="col" class="px-8 py-4 text-[10px] font-bold text-brand-navy uppercase tracking-widest">Pacient</th>
+                    <th scope="col" class="px-8 py-4 text-[10px] font-bold text-brand-navy uppercase tracking-widest">Detalii Contact</th>
+                    <th scope="col" class="px-8 py-4 text-right text-[10px] font-bold text-brand-navy uppercase tracking-widest">Acțiune</th>
+                </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 bg-white">
+                <tr th:each="p : ${pacienti}" class="hover:bg-gray-50 transition-colors group">
+                    <td class="px-8 py-5 whitespace-nowrap">
+                        <div class="flex items-center">
+                            <!-- Avatar Solid -->
+                            <div class="h-10 w-10 rounded-xl bg-brand-teal flex items-center justify-center text-white font-bold shadow-sm border border-brand-teal">
+                                <span th:text="${#strings.substring(p.user.nume,0,1)}">P</span>
+                            </div>
+                            <div class="ml-4">
+                                <div class="text-sm font-bold text-brand-navy group-hover:text-brand-teal transition-colors" th:text="${p.user.nume} + ' ' + ${p.user.prenume}">Nume Pacient</div>
+                                <div class="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Status: Monitorizat</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="px-8 py-5 whitespace-nowrap">
+                        <div class="text-sm font-medium text-gray-600 flex items-center">
+                            <i class="far fa-envelope mr-2 text-brand-blue"></i>
+                            <span th:text="${p.user.email}">email@exemplu.com</span>
+                        </div>
+                    </td>
+                    <td class="px-8 py-5 text-right whitespace-nowrap">
+                        <form th:action="@{/medic/pacienti/{pId}/atribuire(pId=${p.id})}" method="post" class="m-0">
+                            <input type="hidden" name="chestionareIds" th:value="${chestionar.id}">
+
+                            <!-- Buton Acțiune Solid -->
+                            <button type="submit"
+                                    class="inline-flex items-center px-5 py-2.5 bg-brand-teal text-white text-[10px] font-bold uppercase tracking-widest rounded-lg hover:bg-brand-teal/90 shadow-sm transition-all transform active:scale-95">
+                                <i class="fas fa-check-circle mr-2 text-white"></i>
+                                Confirmă Atribuirea
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Empty State adaptat -->
+        <div th:if="${#lists.isEmpty(pacienti)}" class="text-center py-20 bg-gray-50">
+            <div class="mx-auto w-16 h-16 mb-4 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
+                <i class="fas fa-users-slash text-2xl text-gray-400"></i>
+            </div>
+            <h3 class="text-brand-navy font-bold text-lg mb-1">Nu aveți pacienți în listă</h3>
+            <p class="text-gray-500 font-medium text-sm max-w-sm mx-auto">Adăugați pacienți în sistem înainte de a le putea atribui protocoale de evaluare.</p>
+        </div>
+    </div>
+
+</div>
+</body>
+</html>

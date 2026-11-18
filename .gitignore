@@ -1,0 +1,41 @@
+# Fisiere generate
+target/
+build/
+node/
+node_modules/
+*.log
+
+# Configuratii IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# Configuratii locale si secrete
+.env
+.env.*
+/therapeutica-app/src/main/resources/application*.yml
+/therapeutica-app/src/main/resources/application*.yaml
+/therapeutica-app/src/main/resources/application*.properties
+
+# Exemplu de configuratie care poate fi versionat
+!/therapeutica-app/src/main/resources/application-example.yml
+
+# Documente incarcate si copii de siguranta
+upload-dir/
+backups/
+*.bundle
+*.dump
+*.backup
+*.zip
+
+# Chei si certificate private
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Fisiere ale sistemului de operare
+.DS_Store
+Thumbs.db
