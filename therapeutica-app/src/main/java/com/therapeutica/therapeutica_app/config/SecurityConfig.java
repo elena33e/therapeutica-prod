@@ -38,19 +38,38 @@ public class SecurityConfig {
         return auth.build();
     }
 
-    // Varianta corectă și modernă (fără .and()):
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http)
+            throws Exception {
+
         http
                 .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .headers(headers -> headers
-                        .frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)
+                        .frameOptions(
+                                HeadersConfigurer.FrameOptionsConfig::sameOrigin
+                        )
                 )
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/", "/login", "/inregistrare", "/api/auth/**", "/api/test/**",
-                                "/css/**", "/js/**", "/images/**", "/error", "/resetare-parola/**").permitAll()
+                        // Rutele de depanare sunt retrase.
+                        .requestMatchers(
+                                "/api/test",
+                                "/api/test/**",
+                                "/debug-env",
+                                "/debug-env/**"
+                        ).denyAll()
 
-                        // Rute rezervate medicului, indiferent de prefixul controllerului
+                        .requestMatchers(
+                                "/",
+                                "/login",
+                                "/inregistrare",
+                                "/api/auth/**",
+                                "/css/**",
+                                "/js/**",
+                                "/images/**",
+                                "/error",
+                                "/resetare-parola/**"
+                        ).permitAll()
+
                         .requestMatchers("/medic/**").hasRole("MEDIC")
                         .requestMatchers(
                                 "/chestionare/rezultate/**",
@@ -58,7 +77,9 @@ public class SecurityConfig {
                                 "/api/raspunsuri-chestionare",
                                 "/api/raspunsuri-chestionare/**"
                         ).hasRole("MEDIC")
-                        .requestMatchers("/chestionare/medic/**").hasRole("MEDIC")
+                        .requestMatchers(
+                                "/chestionare/medic/**"
+                        ).hasRole("MEDIC")
                         .requestMatchers("/diagnostic/**").hasRole("MEDIC")
 
                         .requestMatchers("/pacient/**").hasRole("PACIENT")
@@ -67,9 +88,12 @@ public class SecurityConfig {
                                 "/raspunsuri/**"
                         ).hasRole("PACIENT")
 
-                        // Rute mixte (medic si pacient) — verificarea la nivel de pacient
-                        // se face in cod, prin AccesPacientService
-                        .requestMatchers("/analize/**", "/chestionare/**", "/raspunsuri/**").authenticated()
+                        // Relația cu pacientul se verifică în servicii.
+                        .requestMatchers(
+                                "/analize/**",
+                                "/chestionare/**",
+                                "/raspunsuri/**"
+                        ).authenticated()
 
                         .anyRequest().authenticated()
                 )
