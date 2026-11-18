@@ -50,6 +50,12 @@ public class SecurityConfig {
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // API-ul vechi pentru răspunsuri este retras.
+                        .requestMatchers(
+                                "/api/raspunsuri-chestionare",
+                                "/api/raspunsuri-chestionare/**"
+                        ).denyAll()
+
                         // Rutele de depanare sunt retrase.
                         .requestMatchers(
                                 "/api/test",
@@ -73,9 +79,7 @@ public class SecurityConfig {
                         .requestMatchers("/medic/**").hasRole("MEDIC")
                         .requestMatchers(
                                 "/chestionare/rezultate/**",
-                                "/chestionare/raport/**",
-                                "/api/raspunsuri-chestionare",
-                                "/api/raspunsuri-chestionare/**"
+                                "/chestionare/raport/**"
                         ).hasRole("MEDIC")
                         .requestMatchers(
                                 "/chestionare/medic/**"
