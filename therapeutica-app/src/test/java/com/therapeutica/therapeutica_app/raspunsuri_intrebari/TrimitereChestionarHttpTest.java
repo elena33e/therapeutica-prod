@@ -44,6 +44,12 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mockingDetails;
 import com.therapeutica.therapeutica_app.raport_chestionar.RezultatScoring;
 import com.therapeutica.therapeutica_app.raport_chestionar.RezultatScoringRepository;
+import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionareRepository;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 @SpringBootTest(properties = {
         "spring.config.location=classpath:/application-http-test.yml"
@@ -98,6 +104,9 @@ class TrimitereChestionarHttpTest {
 
     @MockitoSpyBean
     private RezultatScoringRepository rezultateScoringRepository;
+
+    @MockitoSpyBean
+    private RaspunsuriChestionareRepository chestionareRepository;
 
     private final UUID medicUserId = UUID.randomUUID();
     private final UUID pacientUserId = UUID.randomUUID();
@@ -858,5 +867,298 @@ class TrimitereChestionarHttpTest {
             """,
                 atribuireId
         )).isEqualTo(auditInitial);
+    }
+
+    @Test
+    void douaTrimiteriSimultaneSalveazaODataSiRefuzaACeaDeADoua()
+            throws Exception {
+
+        verificaChestionarNecompletat();
+
+        // Același pacient, autentificat în două sesiuni independente.
+        MockHttpSession primaSesiune = autentificaPacient();
+        MockHttpSession aDouaSesiune = autentificaPacient();
+
+        CountDownLatch primaAreBlocarea = new CountDownLatch(1);
+        CountDownLatch permiteContinuareaPrimei = new CountDownLatch(1);
+        CountDownLatch aDouaIncearcaBlocarea = new CountDownLatch(1);
+
+        AtomicInteger incercariBlocare = new AtomicInteger();
+        AtomicInteger primaConexiunePid = new AtomicInteger();
+        AtomicInteger aDouaConexiunePid = new AtomicInteger();
+
+        var executieReala = mockingDetails(chestionareRepository)
+                .getMockCreationSettings()
+                .getDefaultAnswer();
+
+        doAnswer(invocare -> {
+            int numarIncercare = incercariBlocare.incrementAndGet();
+
+            // Limita este locală tranzacției din containerul de test.
+            entityManager.createNativeQuery(
+                    "SET LOCAL lock_timeout = '20s'"
+            ).executeUpdate();
+
+            int conexiunePid = ((Number) entityManager
+                    .createNativeQuery("SELECT pg_backend_pid()")
+                    .getSingleResult())
+                    .intValue();
+
+            if (numarIncercare == 1) {
+                primaConexiunePid.set(conexiunePid);
+
+                // Executăm interogarea reală și obținem blocarea.
+                Object atribuire = executieReala.answer(invocare);
+
+                primaAreBlocarea.countDown();
+
+                // Păstrăm tranzacția deschisă înainte de salvare.
+                if (!permiteContinuareaPrimei.await(
+                        45,
+                        TimeUnit.SECONDS
+                )) {
+                    throw new IllegalStateException(
+                            "Testul nu a eliberat prima trimitere."
+                    );
+                }
+
+                return atribuire;
+            }
+
+            if (numarIncercare == 2) {
+                aDouaConexiunePid.set(conexiunePid);
+                aDouaIncearcaBlocarea.countDown();
+
+                // Interogarea reală trebuie să aștepte prima tranzacție.
+                return executieReala.answer(invocare);
+            }
+
+            throw new IllegalStateException(
+                    "Număr neașteptat de încercări de blocare: "
+                            + numarIncercare
+            );
+        }).when(chestionareRepository)
+                .findByIdForUpdate(atribuireId);
+
+        var executii = Executors.newFixedThreadPool(2);
+
+        try {
+            Future<MvcResult> primaTrimitere = executii.submit(() ->
+                    trimiteChestionarPentruTestulSimultan(
+                            primaSesiune,
+                            "2"
+                    )
+            );
+
+            assertThat(primaAreBlocarea.await(
+                    15,
+                    TimeUnit.SECONDS
+            ))
+                    .as("Prima cerere a obținut blocarea atribuirii")
+                    .isTrue();
+
+            Future<MvcResult> aDouaTrimitere = executii.submit(() ->
+                    trimiteChestionarPentruTestulSimultan(
+                            aDouaSesiune,
+                            "3"
+                    )
+            );
+
+            assertThat(aDouaIncearcaBlocarea.await(
+                    15,
+                    TimeUnit.SECONDS
+            ))
+                    .as("A doua cerere a ajuns la blocarea atribuirii")
+                    .isTrue();
+
+            assertThat(primaConexiunePid.get()).isPositive();
+            assertThat(aDouaConexiunePid.get())
+                    .isPositive()
+                    .isNotEqualTo(primaConexiunePid.get());
+
+            asteaptaBlocareaCeleiDeADouaCereri(
+                    primaConexiunePid.get(),
+                    aDouaConexiunePid.get(),
+                    aDouaTrimitere
+            );
+
+            // Continuăm numai după confirmarea blocării reale în DB.
+            permiteContinuareaPrimei.countDown();
+
+            MvcResult primulRezultat = primaTrimitere.get(
+                    15,
+                    TimeUnit.SECONDS
+            );
+
+            MvcResult alDoileaRezultat = aDouaTrimitere.get(
+                    15,
+                    TimeUnit.SECONDS
+            );
+
+            status().is3xxRedirection().match(primulRezultat);
+
+            redirectedUrl(
+                    "/chestionare/pacient/"
+                            + pacientUserId
+                            + "/disponibile"
+            ).match(primulRezultat);
+
+            flash().attributeExists("success").match(primulRezultat);
+            flash().attributeCount(1).match(primulRezultat);
+
+            status().isConflict().match(alDoileaRezultat);
+            flash().attributeCount(0).match(alDoileaRezultat);
+
+            assertThat(incercariBlocare.get()).isEqualTo(2);
+        } finally {
+            // Eliberăm prima cerere și în cazul unei verificări eșuate.
+            permiteContinuareaPrimei.countDown();
+            executii.shutdownNow();
+
+            assertThat(executii.awaitTermination(
+                    25,
+                    TimeUnit.SECONDS
+            ))
+                    .as("Ambele execuții s-au încheiat")
+                    .isTrue();
+        }
+
+        // Verificăm datele după încheierea ambelor cereri.
+        var raspunsuri = jdbc.queryForList("""
+                SELECT intrebare_id, categorie_id, scor
+                FROM public.raspunsuri_intrebari
+                WHERE raspuns_chestionar_id = ?
+                """,
+                atribuireId
+        );
+
+        assertThat(raspunsuri).hasSize(1);
+        assertThat(raspunsuri.get(0).get("intrebare_id"))
+                .isEqualTo(intrebareId);
+        assertThat(raspunsuri.get(0).get("categorie_id"))
+                .isEqualTo(categorieId);
+        assertThat(raspunsuri.get(0).get("scor"))
+                .isEqualTo(2);
+
+        var stare = jdbc.queryForMap("""
+                SELECT status, completat_la, scor_total_general
+                FROM public.raspunsuri_chestionare
+                WHERE id = ?
+                """,
+                atribuireId
+        );
+
+        assertThat(stare.get("status")).isEqualTo("COMPLETAT");
+        assertThat(stare.get("completat_la")).isNotNull();
+        assertThat((BigDecimal) stare.get("scor_total_general"))
+                .isEqualByComparingTo("2.00");
+
+        var scoruri = jdbc.queryForList("""
+                SELECT scor_total,
+                       numar_total_intrebari,
+                       numar_intrebari_raspunse,
+                       procentaj_completare
+                FROM public.rezultate_scoring
+                WHERE raspuns_chestionar_id = ?
+                """,
+                atribuireId
+        );
+
+        assertThat(scoruri).hasSize(1);
+
+        var scoring = scoruri.get(0);
+
+        assertThat((BigDecimal) scoring.get("scor_total"))
+                .isEqualByComparingTo("2.00");
+        assertThat(scoring.get("numar_total_intrebari"))
+                .isEqualTo(1);
+        assertThat(scoring.get("numar_intrebari_raspunse"))
+                .isEqualTo(1);
+        assertThat((BigDecimal) scoring.get("procentaj_completare"))
+                .isEqualByComparingTo("100.00");
+
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM public.notificari
+                WHERE utilizator_destinatar_id = ?
+                  AND link_actiune = ?
+                """,
+                Long.class,
+                medicUserId,
+                "/chestionare/medic/vizualizare/" + atribuireId
+        )).isEqualTo(1L);
+
+        assertThat(jdbc.queryForObject("""
+                SELECT COUNT(*)
+                FROM public.audit_log
+                WHERE resursa_id = ?
+                  AND tip_resursa = 'CHESTIONAR'
+                  AND actiune = 'CREARE'
+                """,
+                Long.class,
+                atribuireId
+        )).isEqualTo(1L);
+    }
+
+    private MvcResult trimiteChestionarPentruTestulSimultan(
+            MockHttpSession sesiune,
+            String scor) throws Exception {
+
+        return mockMvc.perform(
+                        post(
+                                "/raspunsuri/completare/{id}/salveaza",
+                                atribuireId
+                        )
+                                .session(sesiune)
+                                .with(csrf())
+                                .contentType(
+                                        MediaType.APPLICATION_FORM_URLENCODED
+                                )
+                                .param("intrebare_" + intrebareId, scor)
+                )
+                .andExpect(handler().methodName("salveazaRaspunsuri"))
+                .andReturn();
+    }
+
+    private void asteaptaBlocareaCeleiDeADouaCereri(
+            int primaConexiunePid,
+            int aDouaConexiunePid,
+            Future<MvcResult> aDouaTrimitere) throws Exception {
+
+        long termen = System.nanoTime()
+                + TimeUnit.SECONDS.toNanos(10);
+
+        do {
+            Boolean esteBlocata = jdbc.queryForObject(
+                    "SELECT ? = ANY(pg_blocking_pids(?))",
+                    Boolean.class,
+                    primaConexiunePid,
+                    aDouaConexiunePid
+            );
+
+            if (Boolean.TRUE.equals(esteBlocata)) {
+                return;
+            }
+
+            if (aDouaTrimitere.isDone()) {
+                MvcResult rezultat = aDouaTrimitere.get(
+                        1,
+                        TimeUnit.SECONDS
+                );
+
+                throw new AssertionError(
+                        "A doua cerere s-a încheiat înainte de "
+                                + "confirmarea blocării în PostgreSQL. HTTP: "
+                                + rezultat.getResponse().getStatus()
+                );
+            }
+
+            Thread.sleep(50);
+        } while (System.nanoTime() < termen);
+
+        throw new AssertionError(
+                "PostgreSQL nu a confirmat că a doua cerere "
+                        + "așteaptă blocarea deținută de prima."
+        );
     }
 }
