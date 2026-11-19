@@ -4,17 +4,22 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface NotificareRepository extends JpaRepository<Notificare, Long> {
 
-    // Corectat: se folosește UtilizatorDestinatar_Id pentru a naviga în relația ManyToOne
-    List<Notificare> findByUtilizatorDestinatar_IdAndCititaFalseOrderByDataCreareDesc(UUID utilizatorDestinatarId);
+    List<Notificare> findByUtilizatorDestinatar_IdOrderByDataCreareDesc(
+            UUID utilizatorDestinatarId
+    );
 
-    // Utilă pentru istoricul complet de notificări
-    List<Notificare> findByUtilizatorDestinatar_IdOrderByDataCreareDesc(UUID utilizatorDestinatarId);
+    long countByUtilizatorDestinatar_IdAndCititaFalse(
+            UUID utilizatorDestinatarId
+    );
 
-    // Returnează numărul de notificări necitite
-    long countByUtilizatorDestinatar_IdAndCititaFalse(UUID utilizatorDestinatarId);
+    Optional<Notificare> findByIdAndUtilizatorDestinatar_Id(
+            Long id,
+            UUID utilizatorDestinatarId
+    );
 }

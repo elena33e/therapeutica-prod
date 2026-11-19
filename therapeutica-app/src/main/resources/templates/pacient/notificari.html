@@ -61,11 +61,14 @@
             </div>
 
             <div class="mt-5 md:mt-0 ml-14 md:ml-0 flex-shrink-0">
-                <a th:href="@{'/api/notificari/acceseaza/' + ${notif.id}}"
-                   class="inline-flex items-center justify-center px-6 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy hover:text-white transition-all shadow-sm group">
-                    <span>Vezi Detalii</span>
-                    <i class="fas fa-arrow-right ml-2 text-[10px] group-hover:translate-x-1 transition-transform"></i>
-                </a>
+                <form th:action="@{/api/notificari/acceseaza/{id}(id=${notif.id})}"
+                      method="post">
+                    <button type="submit"
+                            class="inline-flex items-center justify-center px-6 py-3 bg-gray-50 border border-gray-200 rounded-xl text-[10px] font-bold uppercase tracking-widest text-brand-navy hover:bg-brand-navy hover:text-white transition-all shadow-sm group">
+                        <span>Vezi Detalii</span>
+                        <i class="fas fa-arrow-right ml-2 text-[10px] group-hover:translate-x-1 transition-transform"></i>
+                    </button>
+                </form>
             </div>
         </div>
 

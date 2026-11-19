@@ -1,11 +1,13 @@
 package com.therapeutica.therapeutica_app.notificari;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.view.RedirectView;
 
-import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -13,42 +15,19 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class NotificariApiController {
 
-    private final NotificareRepository notificareRepository;
+    private final NotificariService notificariService;
 
-    @GetMapping("/necitite/{medicId}")
-    public List<Notificare> getNotificari(@PathVariable UUID medicId) {
+    @GetMapping("/necitite-count/{userId}")
+    public long getNumarNotificariNecitite(
+            @PathVariable UUID userId) {
 
-        return notificareRepository.findByUtilizatorDestinatar_IdAndCititaFalseOrderByDataCreareDesc(medicId);
+        return notificariService.numarNecitite(userId);
     }
 
-    @GetMapping("/necitite-count/{medicId}")
-    public long getNumarNotificariNecitite(@PathVariable UUID medicId) {
+    @PostMapping("/acceseaza/{id}")
+    public RedirectView acceseazaNotificare(
+            @PathVariable Long id) {
 
-        return notificareRepository.countByUtilizatorDestinatar_IdAndCititaFalse(medicId);
-    }
-
-    @PostMapping("/marcheaza-citita/{id}")
-    public void marcheazaCitita(@PathVariable Long id) {
-        notificareRepository.findById(id).ifPresent(n -> {
-            n.setCitita(true);
-            notificareRepository.save(n);
-        });
-    }
-
-    @GetMapping("/acceseaza/{id}")
-    public RedirectView acceseazaNotificareSiRedirectioneaza(@PathVariable Long id) {
-        Optional<Notificare> notificareOpt = notificareRepository.findById(id);
-
-        if (notificareOpt.isPresent()) {
-            Notificare notificare = notificareOpt.get();
-            if (!notificare.isCitita()) {
-                notificare.setCitita(true);
-                notificareRepository.save(notificare);
-            }
-            return new RedirectView(notificare.getLinkActiune());
-        }
-
-        // Fallback: Îl trimitem la un dashboard sigur, nu pe root ("/")
-        return new RedirectView("/medic/notificari");
+        return new RedirectView(notificariService.acceseaza(id));
     }
 }
