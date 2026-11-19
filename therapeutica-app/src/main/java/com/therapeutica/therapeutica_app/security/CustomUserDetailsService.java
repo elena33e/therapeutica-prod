@@ -27,10 +27,13 @@ public class CustomUserDetailsService implements UserDetailsService {
 
         String rolCuPrefix = "ROLE_" + utilizator.getRol().name();
 
-        return new User(
+        return new UtilizatorAutentificat(
+                utilizator.getId(),
                 utilizator.getEmail(),
                 utilizator.getParola(),
-                Collections.singletonList(new SimpleGrantedAuthority(rolCuPrefix))
+                Collections.singletonList(
+                        new SimpleGrantedAuthority(rolCuPrefix)
+                )
         );
     }
 }

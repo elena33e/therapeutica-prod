@@ -8,7 +8,12 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.therapeutica.therapeutica_app.utilizatori.RoleType;
+import jakarta.persistence.LockModeType;
+import org.springframework.data.jpa.repository.Lock;
+
 public interface CodInregistrareRepository extends JpaRepository<CodInregistrare, UUID> {
+
 
     CodInregistrare findFirstByGeneratDeId(UUID id);
 
@@ -35,4 +40,33 @@ public interface CodInregistrareRepository extends JpaRepository<CodInregistrare
 
     // Coduri după medic și status
     List<CodInregistrare> findByGeneratDeIdAndStatus(UUID medicId, CodInregistrare.StatusCod status);
+
+    boolean existsByEmailDestinatarIgnoreCaseAndStatus(
+            String emailDestinatar,
+            CodInregistrare.StatusCod status
+    );
+
+    List<CodInregistrare> findByRolDestinatarOrderByCreatedAtDesc(
+            RoleType rolDestinatar
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c
+            FROM CodInregistrare c
+            WHERE c.codUnic = :codUnic
+            """)
+    Optional<CodInregistrare> findByCodUnicForUpdate(
+            @Param("codUnic") String codUnic
+    );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            SELECT c
+            FROM CodInregistrare c
+            WHERE c.id = :id
+            """)
+    Optional<CodInregistrare> findByIdForUpdate(
+            @Param("id") UUID id
+    );
 }

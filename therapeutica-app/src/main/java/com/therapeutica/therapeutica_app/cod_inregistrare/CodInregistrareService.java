@@ -3,168 +3,264 @@ package com.therapeutica.therapeutica_app.cod_inregistrare;
 import com.therapeutica.therapeutica_app.cod_inregistrare.dto.CodInregistrareDTO;
 import com.therapeutica.therapeutica_app.cod_inregistrare.dto.GenerareCodRequest;
 import com.therapeutica.therapeutica_app.cod_inregistrare.dto.GenerareCodResponse;
-import com.therapeutica.therapeutica_app.events.BeforeDeleteUtilizatori;
+import com.therapeutica.therapeutica_app.medici.MediciRepository;
 import com.therapeutica.therapeutica_app.notificari.external.WhatsAppService;
 import com.therapeutica.therapeutica_app.pacienti.PacientiRepository;
+import com.therapeutica.therapeutica_app.security.AccesContService;
+import com.therapeutica.therapeutica_app.util.AccesInterzisException;
 import com.therapeutica.therapeutica_app.util.NotFoundException;
-import com.therapeutica.therapeutica_app.util.ReferencedException;
 import com.therapeutica.therapeutica_app.utilizatori.RoleType;
-import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
 import com.therapeutica.therapeutica_app.utilizatori.UtilizatoriRepository;
-import java.util.List;
-import java.util.Optional;
-import java.util.Random;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
-import org.springframework.data.domain.Sort;
+import jakarta.validation.Validator;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.security.SecureRandom;
+import java.util.List;
+import java.util.UUID;
 
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class CodInregistrareService {
 
-    private static final Logger logger = LoggerFactory.getLogger(CodInregistrareService.class);
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private static final String CARACTERE =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
 
     private final CodInregistrareRepository codInregistrareRepository;
     private final UtilizatoriRepository utilizatoriRepository;
     private final PacientiRepository pacientiRepository;
+    private final MediciRepository mediciRepository;
     private final WhatsAppService whatsappService;
+    private final AccesContService accesContService;
+    private final Validator validator;
+
+    @Transactional(readOnly = true)
+    public RoleType getRolDestinatarPermis() {
+        RoleType rol = PoliticaInvitatii.destinatarPermis(
+                accesContService.utilizatorCurent().getRol()
+        );
+
+        if (rol == null) {
+            throw new AccesInterzisException(
+                    "Nu poți genera invitații."
+            );
+        }
+
+        return rol;
+    }
 
     @Transactional
-    public GenerareCodResponse generareCodInregistrare(GenerareCodRequest request) {
-        logger.info("=== START SERVICE: Generare cod pentru {} ===", request.getEmailDestinatar());
+    public GenerareCodResponse generareCodInregistrare(
+            GenerareCodRequest request) {
 
-        Utilizatori medicUser = utilizatoriRepository.findById(request.getMedicId())
-                .orElseThrow(() -> new NotFoundException("Medicul nu a fost găsit."));
+        var autor = accesContService.utilizatorCurent();
+        RoleType rolPermis =
+                PoliticaInvitatii.destinatarPermis(autor.getRol());
 
-        if (medicUser.getRol() != RoleType.MEDIC && medicUser.getRol() != RoleType.ADMIN) {
-            return new GenerareCodResponse("Eroare: Lipsă permisiuni medic.");
+        if (rolPermis == null
+                || (request.getRolDestinatar() != null
+                && request.getRolDestinatar() != rolPermis)) {
+
+            throw new AccesInterzisException(
+                    "Nu poți invita un utilizator cu acest rol."
+            );
         }
 
-        // 1. Validare Email
-        Optional<Utilizatori> utilizatorExistent = utilizatoriRepository.findByEmail(request.getEmailDestinatar());
-        if (utilizatorExistent.isPresent()) {
-            return new GenerareCodResponse("Eroare: Există deja un cont înregistrat cu acest email.");
+        // Autorul și rolul sunt stabilite pe server.
+        request.setMedicId(autor.getId());
+        request.setRolDestinatar(rolPermis);
+
+        request.setEmailDestinatar(text(request.getEmailDestinatar()));
+        request.setNumeDestinatar(text(request.getNumeDestinatar()));
+        request.setPrenumeDestinatar(text(request.getPrenumeDestinatar()));
+        request.setCnpDestinatar(text(request.getCnpDestinatar()));
+
+        var erori = validator.validate(request);
+
+        if (!erori.isEmpty()) {
+            String mesaj = erori.stream()
+                    .map(eroare -> eroare.getMessage())
+                    .sorted()
+                    .findFirst()
+                    .orElse("Date invalide.");
+
+            return eroare(mesaj);
         }
 
-        if (!codInregistrareRepository.findNeutilizatByEmail(request.getEmailDestinatar()).isEmpty()) {
-            return new GenerareCodResponse("Eroare: Există deja un cod activ pentru acest email.");
+        if (!request.getCnpDestinatar().matches("[0-9]{13}")) {
+            return eroare("CNP-ul trebuie să conțină exact 13 cifre.");
         }
 
-        // 2. Validare CNP
-        String cnp = request.getCnpDestinatar();
-        if (cnp != null && !cnp.trim().isEmpty()) {
-            String cnpClean = cnp.trim();
+        if (rolPermis == RoleType.PACIENT
+                && !mediciRepository.existsById(autor.getId())) {
 
-            if (pacientiRepository.existsByCnp(cnpClean)) {
-                return new GenerareCodResponse("Eroare: Există deja un pacient înregistrat în sistem cu acest CNP.");
-            }
-
-            if (codInregistrareRepository.existsByCnpDestinatarAndStatus(cnpClean, CodInregistrare.StatusCod.NEUTILIZAT)) {
-                return new GenerareCodResponse("Eroare: Există deja un cod de înregistrare activ generat pentru acest CNP.");
-            }
+            return eroare(
+                    "Profilul medicului trebuie completat înainte de invitarea pacienților."
+            );
         }
 
-        String codUnicStr = generareCodUnic();
-        CodInregistrare codEntity = new CodInregistrare();
-        codEntity.setCodUnic(codUnicStr);
-        codEntity.setStatus(CodInregistrare.StatusCod.NEUTILIZAT);
-        codEntity.setGeneratDe(medicUser);
-        codEntity.setAtribuit(null);
+        if (utilizatoriRepository.existsByEmailIgnoreCase(
+                request.getEmailDestinatar())) {
 
-        // Câmpuri apelate corect
-        codEntity.setNumeDestinatar(request.getNumeDestinatar());
-        codEntity.setPrenumeDestinatar(request.getPrenumeDestinatar());
+            return eroare("Există deja un cont cu acest email.");
+        }
 
-        codEntity.setEmailDestinatar(request.getEmailDestinatar());
-        codEntity.setCnpDestinatar(request.getCnpDestinatar());
-        codEntity.setTelefonDestinatar(request.getTelefonDestinatar());
-        codEntity.setRolDestinatar(request.getRolDestinatar());
+        if (codInregistrareRepository
+                .existsByEmailDestinatarIgnoreCaseAndStatus(
+                        request.getEmailDestinatar(),
+                        CodInregistrare.StatusCod.NEUTILIZAT
+                )) {
 
-        codInregistrareRepository.save(codEntity);
+            return eroare(
+                    "Există deja o invitație activă pentru acest email."
+            );
+        }
 
-        GenerareCodResponse response = GenerareCodResponse.builder()
-                .codUnic(codUnicStr)
-                .emailDestinatar(request.getEmailDestinatar())
-                .status(CodInregistrare.StatusCod.NEUTILIZAT)
-                .mesaj("Cod generat cu succes")
+        if (pacientiRepository.existsByCnp(request.getCnpDestinatar())
+                || codInregistrareRepository
+                .existsByCnpDestinatarAndStatus(
+                        request.getCnpDestinatar(),
+                        CodInregistrare.StatusCod.NEUTILIZAT
+                )) {
+
+            return eroare(
+                    "Există deja un pacient sau o invitație activă cu acest CNP."
+            );
+        }
+
+        CodInregistrare cod = new CodInregistrare();
+        cod.setCodUnic(genereazaCodUnic());
+        cod.setStatus(CodInregistrare.StatusCod.NEUTILIZAT);
+        cod.setGeneratDe(autor);
+        cod.setRolDestinatar(rolPermis);
+        cod.setEmailDestinatar(request.getEmailDestinatar());
+        cod.setNumeDestinatar(request.getNumeDestinatar());
+        cod.setPrenumeDestinatar(request.getPrenumeDestinatar());
+        cod.setCnpDestinatar(request.getCnpDestinatar());
+        cod.setTelefonDestinatar(text(request.getTelefonDestinatar()));
+
+        codInregistrareRepository.save(cod);
+
+        GenerareCodResponse rezultat = GenerareCodResponse.builder()
+                .codUnic(cod.getCodUnic())
+                .emailDestinatar(cod.getEmailDestinatar())
+                .status(cod.getStatus())
+                .mesaj("Cod generat cu succes.")
                 .build();
 
-        if (request.getTelefonDestinatar() != null && !request.getTelefonDestinatar().trim().isEmpty()) {
+        if (!text(cod.getTelefonDestinatar()).isEmpty()) {
             try {
-                String link = whatsappService.genereazaLinkMesaj(request.getTelefonDestinatar(), codUnicStr);
-                response.setWhatsappLink(link);
-            } catch (IllegalArgumentException e) {
-                logger.warn("Eșec la generarea link-ului WhatsApp pentru {}: {}", request.getTelefonDestinatar(), e.getMessage());
+                rezultat.setWhatsappLink(
+                        whatsappService.genereazaLinkMesaj(
+                                cod.getTelefonDestinatar(),
+                                cod.getCodUnic()
+                        )
+                );
+            } catch (IllegalArgumentException ignored) {
+                // Codul poate fi transmis și fără link WhatsApp.
             }
         }
 
-        return response;
+        return rezultat;
     }
 
-    public UUID create(final CodInregistrareDTO codInregistrareDTO) {
-        final CodInregistrare codInregistrare = new CodInregistrare();
-        mapToEntity(codInregistrareDTO, codInregistrare);
-        return codInregistrareRepository.save(codInregistrare).getId();
+    @Transactional(readOnly = true)
+    public List<CodInregistrareDTO> getCoduriGestionabile() {
+        var autor = accesContService.utilizatorCurent();
+
+        List<CodInregistrare> coduri;
+
+        if (autor.getRol() == RoleType.ADMIN) {
+            coduri = codInregistrareRepository
+                    .findByRolDestinatarOrderByCreatedAtDesc(RoleType.MEDIC);
+        } else if (autor.getRol() == RoleType.MEDIC) {
+            coduri = codInregistrareRepository
+                    .findByGeneratDeId(autor.getId())
+                    .stream()
+                    .filter(cod ->
+                            cod.getRolDestinatar() == RoleType.PACIENT
+                    )
+                    .toList();
+        } else {
+            throw new AccesInterzisException(
+                    "Nu poți consulta invitațiile."
+            );
+        }
+
+        return coduri.stream().map(this::mapToDTO).toList();
     }
 
-    public void update(final UUID id, final CodInregistrareDTO codInregistrareDTO) {
-        final CodInregistrare codInregistrare = codInregistrareRepository.findById(id)
-                .orElseThrow(NotFoundException::new);
-        mapToEntity(codInregistrareDTO, codInregistrare);
-        codInregistrareRepository.save(codInregistrare);
+    @Transactional
+    public void anuleazaInvitatia(UUID id) {
+        var autor = accesContService.utilizatorCurent();
+
+        CodInregistrare cod = codInregistrareRepository
+                .findByIdForUpdate(id)
+                .orElseThrow(() ->
+                        new NotFoundException("Invitația nu a fost găsită.")
+                );
+
+        boolean permis =
+                (autor.getRol() == RoleType.ADMIN
+                        && cod.getRolDestinatar() == RoleType.MEDIC)
+                        || (autor.getRol() == RoleType.MEDIC
+                        && cod.getRolDestinatar() == RoleType.PACIENT
+                        && autor.getId().equals(
+                        cod.getGeneratDe().getId()
+                ));
+
+        if (!permis) {
+            throw new AccesInterzisException(
+                    "Nu poți anula această invitație."
+            );
+        }
+
+        if (cod.getStatus() != CodInregistrare.StatusCod.NEUTILIZAT
+                || cod.getAtribuit() != null) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "O invitație utilizată nu mai poate fi anulată."
+            );
+        }
+
+        codInregistrareRepository.delete(cod);
     }
 
-    public void delete(final UUID id) {
-        codInregistrareRepository.deleteById(id);
-    }
-
-    public List<CodInregistrareDTO> findAll() {
-        return codInregistrareRepository.findAll(Sort.by("id")).stream()
-                .map(cod -> mapToDTO(cod, new CodInregistrareDTO()))
-                .toList();
-    }
-
-    public CodInregistrareDTO get(final UUID id) {
-        return codInregistrareRepository.findById(id)
-                .map(cod -> mapToDTO(cod, new CodInregistrareDTO()))
-                .orElseThrow(NotFoundException::new);
-    }
-
-    public List<CodInregistrareDTO> getCoduriByMedic(UUID medicId) {
-        return codInregistrareRepository.findByGeneratDeId(medicId).stream()
-                .map(cod -> mapToDTO(cod, new CodInregistrareDTO()))
-                .collect(Collectors.toList());
-    }
-
-    private String generareCodUnic() {
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        Random random = new Random();
+    private String genereazaCodUnic() {
         String cod;
+
         do {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < 8; i++) sb.append(chars.charAt(random.nextInt(chars.length())));
-            cod = sb.toString();
+            StringBuilder rezultat = new StringBuilder(8);
+            for (int i = 0; i < 8; i++) {
+                rezultat.append(CARACTERE.charAt(
+                        RANDOM.nextInt(CARACTERE.length())
+                ));
+            }
+            cod = rezultat.toString();
         } while (codInregistrareRepository.existsByCodUnic(cod));
+
         return cod;
     }
 
-    private CodInregistrareDTO mapToDTO(final CodInregistrare cod, final CodInregistrareDTO dto) {
+    private CodInregistrareDTO mapToDTO(CodInregistrare cod) {
+        CodInregistrareDTO dto = new CodInregistrareDTO();
         dto.setId(cod.getId());
         dto.setCodUnic(cod.getCodUnic());
         dto.setStatus(cod.getStatus());
-        dto.setGeneratDe(cod.getGeneratDe() != null ? cod.getGeneratDe().getId() : null);
-        dto.setAtribuit(cod.getAtribuit() != null ? cod.getAtribuit().getId() : null);
         dto.setCreatedAt(cod.getCreatedAt());
-        // Mapări completate
+        dto.setGeneratDe(cod.getGeneratDe().getId());
+        dto.setAtribuit(
+                cod.getAtribuit() == null
+                        ? null
+                        : cod.getAtribuit().getId()
+        );
         dto.setNumeDestinatar(cod.getNumeDestinatar());
         dto.setPrenumeDestinatar(cod.getPrenumeDestinatar());
-
         dto.setEmailDestinatar(cod.getEmailDestinatar());
         dto.setCnpDestinatar(cod.getCnpDestinatar());
         dto.setTelefonDestinatar(cod.getTelefonDestinatar());
@@ -172,30 +268,11 @@ public class CodInregistrareService {
         return dto;
     }
 
-    private void mapToEntity(final CodInregistrareDTO dto, final CodInregistrare cod) {
-        cod.setCodUnic(dto.getCodUnic());
-        cod.setStatus(dto.getStatus());
-        if (dto.getGeneratDe() != null) {
-            cod.setGeneratDe(utilizatoriRepository.findById(dto.getGeneratDe()).orElse(null));
-        }
-        if (dto.getAtribuit() != null) {
-            cod.setAtribuit(utilizatoriRepository.findById(dto.getAtribuit()).orElse(null));
-        }
-
-
-        cod.setNumeDestinatar(dto.getNumeDestinatar());
-        cod.setPrenumeDestinatar(dto.getPrenumeDestinatar());
-        cod.setEmailDestinatar(dto.getEmailDestinatar());
-        cod.setCnpDestinatar(dto.getCnpDestinatar());
-        cod.setTelefonDestinatar(dto.getTelefonDestinatar());
-        cod.setRolDestinatar(dto.getRolDestinatar());
+    private static GenerareCodResponse eroare(String mesaj) {
+        return new GenerareCodResponse("Eroare: " + mesaj);
     }
 
-    @EventListener(BeforeDeleteUtilizatori.class)
-    public void on(final BeforeDeleteUtilizatori event) {
-        if (codInregistrareRepository.findFirstByGeneratDeId(event.getId()) != null ||
-                codInregistrareRepository.findFirstByAtribuitId(event.getId()) != null) {
-            throw new ReferencedException();
-        }
+    private static String text(String valoare) {
+        return valoare == null ? "" : valoare.trim();
     }
 }
