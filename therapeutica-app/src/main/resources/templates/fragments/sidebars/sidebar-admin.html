@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+<aside class="fixed left-0 top-0 h-full w-64 bg-brand-navy text-white
+              shadow-xl z-50 hidden md:block">
+    <div class="p-6 border-b border-white/10">
+        <h2 class="font-bold text-brand-gold text-lg">Administrator</h2>
+        <p class="mt-3 text-sm"
+           th:text="${session.userNume + ' ' + session.userPrenume}"></p>
+        <p class="text-xs text-white/60 mt-1"
+           th:text="${session.userEmail}"></p>
+    </div>
+
+    <nav class="p-4 space-y-3">
+        <a th:href="@{/admin}" class="block rounded-lg px-4 py-3 hover:bg-white/10">
+            Conturi de medic
+        </a>
+        <a th:href="@{/generare-cod}"
+           class="block rounded-lg px-4 py-3 hover:bg-white/10">
+            Invitații
+        </a>
+        <form th:action="@{/api/auth/logout-web}" method="post">
+            <button type="submit" class="px-4 py-3 text-rose-200">
+                Deconectare
+            </button>
+        </form>
+    </nav>
+</aside>
+</body>
+</html>

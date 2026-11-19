@@ -1,14 +1,24 @@
 package com.therapeutica.therapeutica_app.medici;
-import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 
+import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapsId;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OneToOne;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.Setter;
-import java.util.UUID;
+
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
+@Table(name = "medici")
 @Getter
 @Setter
 public class Medici {
@@ -17,8 +27,9 @@ public class Medici {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", referencedColumnName = "id", insertable = false, updatable = false)
+    @MapsId
+    @OneToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private Utilizatori user;
 
     @Column(nullable = false, columnDefinition = "text")

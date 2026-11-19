@@ -74,3 +74,11 @@ Acest repository pornește din ramura `versiune-productie` a proiectului [elena3
 [Consultă commitul sursă](https://github.com/elena33e/therapeutica-app/commit/5ad9106271f4c29ccc5c4aa329f5c4da33d76704).
 
 Repository-ul de producție începe cu un istoric nou. Istoricul anterior și versiunea disertației, identificată prin tagul [disertatie-v1](https://github.com/elena33e/therapeutica-app/tree/disertatie-v1), sunt păstrate în repository-ul original.
+
+## Administrarea conturilor
+
+Administratorul invită medici, iar medicii invită pacienți. Activarea creează contul și profilul corespunzător într-o singură tranzacție.
+
+Primul administrator se creează explicit prin comanda `creare-administrator`, executată din JAR-ul aplicației. Comanda primește proprietățile `admin.email`, `admin.nume` și `admin.prenume`. Parola se transmite prin variabila de mediu `THERAPEUTICA_ADMIN_PASSWORD`.
+
+Comanda folosește configurația conexiunii PostgreSQL a profilului selectat. Nu pornește serverul web și nu execută migrări. Dacă există deja un administrator, nu creează altul și nu modifică parolele sau rolurile conturilor existente.

@@ -1,78 +1,124 @@
 package com.therapeutica.therapeutica_app.cod_inregistrare.ui;
 
-import com.therapeutica.therapeutica_app.cod_inregistrare.CodInregistrare;
 import com.therapeutica.therapeutica_app.cod_inregistrare.CodInregistrareService;
-import com.therapeutica.therapeutica_app.cod_inregistrare.dto.CodInregistrareDTO;
 import com.therapeutica.therapeutica_app.cod_inregistrare.dto.GenerareCodRequest;
 import com.therapeutica.therapeutica_app.cod_inregistrare.dto.GenerareCodResponse;
-import jakarta.servlet.http.HttpSession;
-import java.util.List;
-import java.util.UUID;
+import com.therapeutica.therapeutica_app.security.AccesContService;
+import com.therapeutica.therapeutica_app.util.AccesInterzisException;
+import com.therapeutica.therapeutica_app.utilizatori.RoleType;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.support.RedirectAttributes;
+
+import java.util.UUID;
 
 @Controller
 @RequestMapping("/generare-cod")
+@RequiredArgsConstructor
 public class GenerareCodController {
 
     private final CodInregistrareService codInregistrareService;
+    private final AccesContService accesContService;
 
-    public GenerareCodController(CodInregistrareService codInregistrareService) {
-        this.codInregistrareService = codInregistrareService;
+    @InitBinder("request")
+    void configureazaFormularul(WebDataBinder binder) {
+        binder.setAllowedFields(
+                "emailDestinatar",
+                "cnpDestinatar",
+                "telefonDestinatar",
+                "rolDestinatar",
+                "numeDestinatar",
+                "prenumeDestinatar"
+        );
     }
 
     @GetMapping
-    public String afiseazaPagina(HttpSession session, Model model) {
-        String userId = (String) session.getAttribute("userId");
-        String userRole = (String) session.getAttribute("userRole");
-
-        if (userId == null) {
-            return "redirect:/login?redirect=/generare-cod";
-        }
-        if (!"MEDIC".equals(userRole) && !"ADMINISTRATOR".equals(userRole)) {
-            return "redirect:/dashboard?error=access-denied";
-        }
-
-        adaugaStatisticiInModel(UUID.fromString(userId), model);
-        model.addAttribute("request", new GenerareCodRequest());
+    public String afiseazaPagina(Model model) {
+        model.addAttribute("request", formularNou());
+        adaugaDatelePaginii(model);
         return "generare-cod";
     }
 
     @PostMapping
-    public String generareCod(@ModelAttribute GenerareCodRequest request,
-                              HttpSession session, Model model) {
-        String userId = (String) session.getAttribute("userId");
-        String userRole = (String) session.getAttribute("userRole");
+    public String generareCod(
+            @ModelAttribute("request") GenerareCodRequest request,
+            BindingResult bindingResult,
+            Model model) {
 
-        if (userId == null) {
-            return "redirect:/login?redirect=/generare-cod";
+        GenerareCodResponse rezultat;
+
+        if (bindingResult.hasErrors()) {
+            rezultat = new GenerareCodResponse(
+                    "Eroare: Verifică datele formularului."
+            );
+        } else {
+            try {
+                rezultat = codInregistrareService
+                        .generareCodInregistrare(request);
+            } catch (AccesInterzisException | ResponseStatusException e) {
+                throw e;
+            } catch (Exception e) {
+                rezultat = new GenerareCodResponse(
+                        "Eroare: Invitația nu a putut fi salvată."
+                );
+            }
         }
-        if (!"MEDIC".equals(userRole) && !"ADMINISTRATOR".equals(userRole)) {
-            return "redirect:/dashboard?error=access-denied";
+
+        model.addAttribute("rezultat", rezultat);
+
+        if (rezultat.getCodUnic() != null) {
+            model.addAttribute("request", formularNou());
         }
 
-        request.setMedicId(UUID.fromString(userId));
-        GenerareCodResponse response = codInregistrareService.generareCodInregistrare(request);
-        model.addAttribute("rezultat", response);
-
-        adaugaStatisticiInModel(UUID.fromString(userId), model);
-        model.addAttribute("request", new GenerareCodRequest());
+        adaugaDatelePaginii(model);
         return "generare-cod";
     }
 
-    private void adaugaStatisticiInModel(UUID medicId, Model model) {
-        List<CodInregistrareDTO> coduri = codInregistrareService.getCoduriByMedic(medicId);
-        long coduriActive = coduri.stream()
-                .filter(c -> c.getStatus() == CodInregistrare.StatusCod.NEUTILIZAT)
-                .count();
+    @PostMapping("/{id}/anuleaza")
+    public String anuleazaInvitatia(
+            @PathVariable UUID id,
+            RedirectAttributes redirectAttributes) {
 
-        model.addAttribute("coduri", coduri);
-        model.addAttribute("totalCoduri", coduri.size());
-        model.addAttribute("coduriActive", coduriActive);
-        model.addAttribute("coduriUtilizate", coduri.size() - coduriActive);
+        codInregistrareService.anuleazaInvitatia(id);
+        redirectAttributes.addFlashAttribute(
+                "success",
+                "Invitația a fost anulată."
+        );
+
+        return "redirect:/generare-cod";
+    }
+
+    private GenerareCodRequest formularNou() {
+        GenerareCodRequest request = new GenerareCodRequest();
+        request.setRolDestinatar(
+                codInregistrareService.getRolDestinatarPermis()
+        );
+        return request;
+    }
+
+    private void adaugaDatelePaginii(Model model) {
+        var autor = accesContService.utilizatorCurent();
+        RoleType destinatar =
+                codInregistrareService.getRolDestinatarPermis();
+
+        model.addAttribute(
+                "tipCont",
+                destinatar == RoleType.MEDIC ? "medic" : "pacient"
+        );
+        model.addAttribute(
+                "dashboardUrl",
+                (autor.getRol() == RoleType.ADMIN
+                        ? "/admin/dashboard/"
+                        : "/medic/dashboard/") + autor.getId()
+        );
+        model.addAttribute(
+                "coduri",
+                codInregistrareService.getCoduriGestionabile()
+        );
     }
 }

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Administrare — Therapeutica</title>
+</head>
+<body>
+<div layout:fragment="content" class="max-w-6xl mx-auto p-6 md:p-10">
+    <h1 class="text-3xl font-bold text-brand-navy">Administrare</h1>
+    <p class="text-gray-600 mt-2">Conturi de medic și invitații de activare.</p>
+
+    <a th:href="@{/generare-cod}"
+       class="inline-block bg-brand-teal text-white font-bold rounded-xl px-6 py-3 mt-6">
+        Invită un medic
+    </a>
+
+    <h2 class="text-xl font-bold text-brand-navy mt-10 mb-4">
+        Conturi de medic
+    </h2>
+
+    <p th:if="${medici.isEmpty()}" class="text-gray-500">
+        Nu există încă medici înregistrați.
+    </p>
+
+    <div th:unless="${medici.isEmpty()}"
+         class="bg-white border rounded-xl overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="bg-gray-50">
+            <tr>
+                <th class="p-4">Nume</th>
+                <th class="p-4">Email</th>
+                <th class="p-4">Creat la</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr th:each="medic : ${medici}" class="border-t">
+                <td class="p-4"
+                    th:text="${medic.nume() + ' ' + medic.prenume()}"></td>
+                <td class="p-4" th:text="${medic.email()}"></td>
+                <td class="p-4"
+                    th:text="${#temporals.format(medic.creatLa(), 'dd.MM.yyyy')}"></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <form th:action="@{/api/auth/logout-web}" method="post" class="mt-8">
+        <button type="submit" class="text-red-700 font-bold">
+            Deconectare
+        </button>
+    </form>
+</div>
+</body>
+</html>

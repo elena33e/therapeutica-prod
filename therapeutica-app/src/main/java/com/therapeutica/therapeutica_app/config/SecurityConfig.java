@@ -6,7 +6,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,6 +49,28 @@ public class SecurityConfig {
                         )
                 )
                 .authorizeHttpRequests(auth -> auth
+                        // API-uri de conturi retrase.
+                        .requestMatchers(
+                                "/api/utilizatoris",
+                                "/api/utilizatoris/**",
+                                "/api/medicis",
+                                "/api/medicis/**",
+                                "/api/coduri-inregistrare",
+                                "/api/coduri-inregistrare/**"
+                        ).denyAll()
+
+                        .requestMatchers(
+                                "/admin",
+                                "/admin/dashboard/**"
+                        ).hasRole("ADMIN")
+
+                        // Administrarea chestionarelor va fi tratată separat.
+                        .requestMatchers("/admin/**").denyAll()
+
+                        .requestMatchers(
+                                "/generare-cod",
+                                "/generare-cod/**"
+                        ).hasAnyRole("ADMIN", "MEDIC")
                         // API-ul vechi pentru răspunsuri este retras.
                         .requestMatchers(
                                 "/api/raspunsuri-chestionare",
@@ -68,7 +89,6 @@ public class SecurityConfig {
                                 "/",
                                 "/login",
                                 "/inregistrare",
-                                "/api/auth/**",
                                 "/css/**",
                                 "/js/**",
                                 "/images/**",
@@ -95,11 +115,13 @@ public class SecurityConfig {
                         // Relația cu pacientul se verifică în servicii.
                         .requestMatchers(
                                 "/analize/**",
+                                "/documente/**",
                                 "/chestionare/**",
-                                "/raspunsuri/**"
-                        ).authenticated()
+                                "/raspunsuri/**",
+                                "/raspunsuri-chestionare/**"
+                        ).hasAnyRole("MEDIC", "PACIENT")
 
-                        .anyRequest().authenticated()
+                        .anyRequest().hasAnyRole("MEDIC", "PACIENT")
                 )
                 .formLogin(login -> login
                         .loginPage("/login")

@@ -1,135 +1,163 @@
 package com.therapeutica.therapeutica_app.auth;
 
-import com.therapeutica.therapeutica_app.auth.dto.CodVerificareResponse;
 import com.therapeutica.therapeutica_app.auth.dto.InregistrareRequest;
 import com.therapeutica.therapeutica_app.auth.dto.InregistrareResponse;
 import com.therapeutica.therapeutica_app.cod_inregistrare.CodInregistrare;
 import com.therapeutica.therapeutica_app.cod_inregistrare.CodInregistrareRepository;
+import com.therapeutica.therapeutica_app.cod_inregistrare.PoliticaInvitatii;
+import com.therapeutica.therapeutica_app.medici.Medici;
+import com.therapeutica.therapeutica_app.medici.MediciRepository;
 import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 import com.therapeutica.therapeutica_app.pacienti.PacientiRepository;
+import com.therapeutica.therapeutica_app.pacienti.Sex;
 import com.therapeutica.therapeutica_app.util.PasswordValidator;
 import com.therapeutica.therapeutica_app.utilizatori.RoleType;
 import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
 import com.therapeutica.therapeutica_app.utilizatori.UtilizatoriRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
+import java.util.Locale;
 
 @Service
+@RequiredArgsConstructor
 public class InregistrareService {
 
-    @Autowired
-    private CodInregistrareRepository codInregistrareRepository;
-
-    @Autowired
-    private UtilizatoriRepository utilizatoriRepository;
-
-    @Autowired
-    private PacientiRepository pacientiRepository;
-
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final CodInregistrareRepository codInregistrareRepository;
+    private final UtilizatoriRepository utilizatoriRepository;
+    private final PacientiRepository pacientiRepository;
+    private final MediciRepository mediciRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Transactional
-    public InregistrareResponse inregistreazaUtilizator(InregistrareRequest request) {
-        try {
-            // Validări de bază
-            if (!request.getParola().equals(request.getConfirmaParola())) {
-                return new InregistrareResponse(false, "Parolele nu coincid");
-            }
+    public InregistrareResponse inregistreazaUtilizator(
+            InregistrareRequest request) {
 
-            if (!PasswordValidator.isValida(request.getParola())) {
-                return new InregistrareResponse(false,
-                        "Parola trebuie să aibă cel puțin 8 caractere, o cifră și un caracter special");
-            }
-
-            // Verificare cod inregistrare
-            Optional<CodInregistrare> codOpt = codInregistrareRepository
-                    .findByCodUnicAndStatus(request.getCodUnic(), CodInregistrare.StatusCod.NEUTILIZAT);
-
-            if (codOpt.isEmpty()) {
-                return new InregistrareResponse(false, "Cod de înregistrare invalid sau deja utilizat");
-            }
-
-            CodInregistrare cod = codOpt.get();
-
-            // ---> AICI ESTE LOCUL EXACT PENTRU VALIDARE <---
-            if (request.getCnp() == null || !request.getCnp().equals(cod.getCnpDestinatar())) {
-                return new InregistrareResponse(false, "CNP-ul introdus nu corespunde cu cel asociat codului.");
-            }
-
-           // Creare instanța Utilizator nou
-            Utilizatori utilizatorNou = new Utilizatori();
-            utilizatorNou.setEmail(cod.getEmailDestinatar());
-            utilizatorNou.setRol(cod.getRolDestinatar());
-            utilizatorNou.setParola(passwordEncoder.encode(request.getParola()));
-            utilizatorNou.setNume(cod.getNumeDestinatar());
-            utilizatorNou.setPrenume(cod.getPrenumeDestinatar());
-            utilizatoriRepository.save(utilizatorNou);
-
-            // Creare + asociere profil Pacient
-            if (cod.getRolDestinatar() == RoleType.PACIENT) {
-                Pacienti pacientNou = new Pacienti();
-                pacientNou.setUser(utilizatorNou);
-                pacientNou.setCnp(cod.getCnpDestinatar());
-                pacientNou.setMedic(cod.getGeneratDe().getMedic());
-                pacientiRepository.save(pacientNou);
-            }
-
-           // Invalidare cod
-            cod.setStatus(CodInregistrare.StatusCod.UTILIZAT);
-            cod.setAtribuit(utilizatorNou);
-            codInregistrareRepository.save(cod);
-
-            return new InregistrareResponse(
-                    true,
-                    "Cont creat și activat cu succes!",
-                    utilizatorNou.getEmail(),
-                    utilizatorNou.getRol(),
-                    false
+        if (!PasswordValidator.isValida(request.getParola())) {
+            return eroare(
+                    "Parola trebuie să aibă cel puțin 8 caractere, o cifră și un caracter special."
             );
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new InregistrareResponse(false, "Eroare internă la procesarea înregistrării: " + e.getMessage());
         }
-    }
 
-    @Transactional(readOnly = true)
-    public CodVerificareResponse verificaCod(String codUnic) {
-        try {
-            Optional<CodInregistrare> codOpt = codInregistrareRepository
-                    .findByCodUnicAndStatus(codUnic, CodInregistrare.StatusCod.NEUTILIZAT);
+        if (!request.getParola().equals(request.getConfirmaParola())) {
+            return eroare("Parolele nu coincid.");
+        }
 
-            if (codOpt.isPresent()) {
-                CodInregistrare cod = codOpt.get();
+        String codPrimit = text(request.getCodUnic())
+                .toUpperCase(Locale.ROOT);
 
-                Optional<Utilizatori> utilizatorOpt = utilizatoriRepository.findByEmail(cod.getEmailDestinatar());
+        String cnp = text(request.getCnp());
 
-                if (utilizatorOpt.isPresent()) {
-                    Utilizatori utilizator = utilizatorOpt.get();
-                    return new CodVerificareResponse(
-                            true,
-                            "Cod valid",
-                            cod.getEmailDestinatar(),
-                            utilizator.getNume(),
-                            utilizator.getPrenume(),
-                            cod.getRolDestinatar()
-                    );
-                } else {
-                    return new CodVerificareResponse(false, "Nu există utilizator pentru acest cod");
-                }
-            } else {
-                return new CodVerificareResponse(false, "Cod invalid sau deja utilizat");
+        if (codPrimit.isEmpty() || !cnp.matches("[0-9]{13}")) {
+            return eroare("Verifică codul de înregistrare și CNP-ul.");
+        }
+
+        var codOpt = codInregistrareRepository
+                .findByCodUnicForUpdate(codPrimit);
+
+        if (codOpt.isEmpty()
+                || codOpt.get().getStatus()
+                != CodInregistrare.StatusCod.NEUTILIZAT) {
+
+            return eroare("Cod invalid sau deja utilizat.");
+        }
+
+        CodInregistrare cod = codOpt.get();
+
+        if (!cnp.equals(text(cod.getCnpDestinatar()))) {
+            return eroare(
+                    "CNP-ul nu corespunde celui asociat invitației."
+            );
+        }
+
+        if (cod.getGeneratDe() == null
+                || !PoliticaInvitatii.permite(
+                cod.getGeneratDe().getRol(),
+                cod.getRolDestinatar()
+        )) {
+
+            return eroare(
+                    "Invitația nu mai corespunde regulilor de acces. Solicită un cod nou."
+            );
+        }
+
+        if (text(cod.getEmailDestinatar()).isEmpty()
+                || text(cod.getNumeDestinatar()).isEmpty()
+                || text(cod.getPrenumeDestinatar()).isEmpty()) {
+
+            return eroare("Invitația conține date incomplete.");
+        }
+
+        if (utilizatoriRepository.existsByEmailIgnoreCase(
+                cod.getEmailDestinatar())) {
+
+            return eroare("Există deja un cont cu acest email.");
+        }
+
+        Medici medicAlPacientului = null;
+
+        if (cod.getRolDestinatar() == RoleType.PACIENT) {
+            medicAlPacientului = mediciRepository
+                    .findById(cod.getGeneratDe().getId())
+                    .orElse(null);
+
+            if (medicAlPacientului == null) {
+                return eroare("Medicul asociat invitației nu este disponibil.");
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            return new CodVerificareResponse(false, "Eroare la verificarea codului: " + e.getMessage());
+
+            if (pacientiRepository.existsByCnp(cnp)) {
+                return eroare("Există deja un pacient cu acest CNP.");
+            }
         }
+
+        Utilizatori utilizator = new Utilizatori();
+        utilizator.setEmail(text(cod.getEmailDestinatar()));
+        utilizator.setNume(text(cod.getNumeDestinatar()));
+        utilizator.setPrenume(text(cod.getPrenumeDestinatar()));
+        utilizator.setRol(cod.getRolDestinatar());
+        utilizator.setParola(
+                passwordEncoder.encode(request.getParola())
+        );
+
+        utilizatoriRepository.saveAndFlush(utilizator);
+
+        if (cod.getRolDestinatar() == RoleType.MEDIC) {
+            Medici medic = new Medici();
+            medic.setUser(utilizator);
+            medic.setSpecializare("");
+            medic.setTelefon(text(cod.getTelefonDestinatar()));
+
+            mediciRepository.saveAndFlush(medic);
+        } else {
+            Pacienti pacient = new Pacienti();
+            pacient.setUser(utilizator);
+            pacient.setCnp(cnp);
+            pacient.setSex(Sex.NEPRECIZAT);
+            pacient.setMedic(medicAlPacientului);
+
+            pacientiRepository.saveAndFlush(pacient);
+        }
+
+        cod.setStatus(CodInregistrare.StatusCod.UTILIZAT);
+        cod.setAtribuit(utilizator);
+        codInregistrareRepository.save(cod);
+
+        return new InregistrareResponse(
+                true,
+                "Cont creat și activat cu succes!",
+                utilizator.getEmail(),
+                utilizator.getRol(),
+                false
+        );
     }
 
+    private static InregistrareResponse eroare(String mesaj) {
+        return new InregistrareResponse(false, mesaj);
+    }
 
+    private static String text(String valoare) {
+        return valoare == null ? "" : valoare.trim();
+    }
 }
