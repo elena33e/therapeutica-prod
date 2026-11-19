@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Pregătire raport | Therapeutica</title>
+</head>
+<body>
+<div layout:fragment="content"
+     class="max-w-3xl mx-auto px-4 py-10 space-y-6">
+
+    <h1 class="text-3xl font-bold text-brand-navy">
+        Pregătire raport
+    </h1>
+
+    <div th:if="${error}"
+         th:text="${error}"
+         role="alert"
+         class="bg-red-50 text-red-700 rounded-xl p-4">
+    </div>
+
+    <p class="text-gray-600">
+        Raportul acestui chestionar necesită pregătirea scorurilor
+        înainte de afișare.
+    </p>
+
+    <form th:action="@{/chestionare/medic/pregateste-raport/{id}(id=${raspunsChestionarId})}"
+          method="post">
+        <button type="submit"
+                class="px-5 py-3 bg-brand-teal text-white font-bold rounded-xl">
+            Pregătește raportul
+        </button>
+    </form>
+
+    <a th:href="@{/medic/rapoarte/{id}(id=${session.userId})}"
+       class="inline-block text-brand-blue font-bold underline">
+        Înapoi la rapoarte
+    </a>
+</div>
+</body>
+</html>

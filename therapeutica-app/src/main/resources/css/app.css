@@ -1,2 +1,25 @@
-@import 'tailwindcss';
-@plugin '@tailwindcss/forms';
+@import "tailwindcss" source(none);
+
+@source "../templates";
+@source "../js";
+@source "./safelist.txt";
+
+@plugin "@tailwindcss/forms";
+
+@theme {
+    --color-brand-navy: #464d78;
+    --color-brand-gold: #ddc696;
+    --color-brand-teal: #4ab097;
+    --color-brand-blue: #6ca2c4;
+
+    --color-primary: #464d78;
+    --color-secondary: #ddc696;
+    --color-success: #4ab097;
+    --color-info: #6ca2c4;
+
+    --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+}
+
+[x-cloak] {
+    display: none !important;
+}

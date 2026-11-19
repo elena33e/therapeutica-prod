@@ -118,18 +118,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.librepdf</groupId>
-            <artifactId>openpdf</artifactId>
-            <version>2.0.5</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.github.librepdf</groupId>
-            <artifactId>openpdf-fonts-extra</artifactId>
-            <version>2.0.5</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
             <scope>test</scope>
@@ -176,7 +164,7 @@
                             <goal>npm</goal>
                         </goals>
                         <configuration>
-                            <arguments>install</arguments>
+                            <arguments>ci</arguments>
                         </configuration>
                     </execution>
                     <execution>
