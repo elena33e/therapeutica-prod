@@ -1,6 +1,5 @@
 package com.therapeutica.therapeutica_app.infrastructure;
 
-import com.therapeutica.therapeutica_app.analize_medicale.DocumentMedicalRepository;
 import com.therapeutica.therapeutica_app.intrebari.IntrebariRepository;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -14,6 +13,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.therapeutica.therapeutica_app.analize_medicale.DocumentMedicalRepository;
 
 @DataJpaTest(properties = {
         "spring.config.location=classpath:/application-schema-test.yml"
