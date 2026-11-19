@@ -6,7 +6,6 @@ import com.therapeutica.therapeutica_app.categorii_chestionare.CategoriiChestion
 import com.therapeutica.therapeutica_app.categorii_chestionare.CategoriiChestionareRepository;
 import com.therapeutica.therapeutica_app.chestionare.Chestionare;
 import com.therapeutica.therapeutica_app.chestionare.ChestionareRepository;
-import com.therapeutica.therapeutica_app.chestionare.RaportGeneratorService;
 import com.therapeutica.therapeutica_app.intrebari.Intrebare;
 import com.therapeutica.therapeutica_app.intrebari.IntrebariRepository;
 import com.therapeutica.therapeutica_app.pacienti.Pacienti;
@@ -41,6 +40,13 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import java.io.IOException;
+import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+import com.therapeutica.therapeutica_app.chestionare.PregatireRaportService;
+import com.therapeutica.therapeutica_app.security.AccesContService;
+import com.therapeutica.therapeutica_app.util.AccesInterzisException;
+
 
 @Controller
 @RequestMapping("/chestionare")
@@ -53,7 +59,6 @@ public class ChestionarController {
     private final IntrebariRepository intrebariRepository;
     private final RaspunsuriChestionareRepository raspunsuriChestionareRepository;
     private final RaspunsuriIntrebariService raspunsuriIntrebariService;
-    private final RaportGeneratorService raportGeneratorService;
     private final PacientiRepository pacientiRepository;
     private final ScoringService scoringService;
     private final AuditService auditService;
@@ -61,14 +66,18 @@ public class ChestionarController {
     private final AccesChestionarService accesChestionarService;
     private final RevizuireChestionarService revizuireChestionarService;
     private final ValidareRaspunsuriService validareRaspunsuriService;
+    private final AccesContService accesContService;
+    private final PregatireRaportService pregatireRaportService;
 
     /**
      * Afișează un chestionar pentru completare
      */
     @GetMapping("/completare/{raspunsChestionarId}")
-    public String afiseazaPentruCompletare(@PathVariable UUID raspunsChestionarId,
-                                           HttpSession session,
-                                           Model model) {
+    public String afiseazaPentruCompletare(
+            @PathVariable UUID raspunsChestionarId,
+            HttpSession session,
+            HttpServletResponse response,
+            Model model) {
 
         log.info("Accesare chestionar pentru completare: {}", raspunsChestionarId);
 
@@ -156,8 +165,19 @@ public class ChestionarController {
             return "pacient/completare-chestionar";
 
         } catch (Exception e) {
-            log.error("Eroare la afișarea chestionarului {}: {}", raspunsChestionarId, e.getMessage(), e);
-            model.addAttribute("error", "Eroare internă: " + e.getMessage());
+            log.error(
+                    "Eroare la afișarea chestionarului {}",
+                    raspunsChestionarId,
+                    e
+            );
+
+            response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+
+            model.addAttribute(
+                    "error",
+                    "Chestionarul nu poate fi afișat momentan. Încearcă din nou."
+            );
+
             return "error";
         }
     }
@@ -225,117 +245,111 @@ public class ChestionarController {
      * pacientului, cât și din notificarea de chestionar completat.
      */
     @GetMapping("/medic/vizualizare/{raspunsChestionarId}")
-    public String vizualizeazaRaspunsuri(@PathVariable UUID raspunsChestionarId,
-                                         HttpSession session,
-                                         Model model) {
+    public String vizualizeazaRaspunsuri(
+            @PathVariable UUID raspunsChestionarId,
+            HttpSession session,
+            HttpServletResponse response,
+            Model model) {
 
-        // findByIdForCompletare face JOIN FETCH pe chestionar, pacient și pacient.user —
-        // necesar fiindcă template-ul accesează aceste relații în afara tranzacției
-        RaspunsuriChestionare raspunsChestionar = raspunsuriChestionareRepository
-                .findByIdForCompletare(raspunsChestionarId)
-                .orElseThrow(() -> new NotFoundException("Chestionarul nu a fost găsit"));
+        var utilizatorCurent = accesContService.utilizatorCurent();
+        RaspunsuriChestionare raspunsChestionar =
+                raspunsuriChestionareRepository
+                        .findByIdForCompletare(raspunsChestionarId)
+                        .orElseThrow(() ->
+                                new NotFoundException(
+                                        "Chestionarul nu a fost găsit."
+                                )
+                        );
 
         Pacienti pacient = raspunsChestionar.getPacient();
 
         if (pacient == null) {
-            throw new NotFoundException("Pacientul asociat nu a fost găsit.");
+            throw new NotFoundException(
+                    "Pacientul asociat nu a fost găsit."
+            );
         }
 
         accesPacientService.verificaAccesMedic(session, pacient.getId());
 
+        boolean finalizat =
+                raspunsChestionar.getStatus()
+                        == RaspunsuriChestionare.StatusRaspuns.COMPLETAT
+                        || raspunsChestionar.getStatus()
+                        == RaspunsuriChestionare.StatusRaspuns.REVIZUIT;
+
+        if (!finalizat) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Raportul este disponibil după completarea chestionarului."
+            );
+        }
+
+        response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
+
+        Optional<RezultatScoring> scorExistent = scoringService
+                .getScoruriCalculate(raspunsChestionarId)
+                .filter(scor ->
+                        Boolean.FALSE.equals(scor.getNecesitaRecalculare())
+                );
+
+        if (scorExistent.isEmpty()) {
+            model.addAttribute(
+                    "raspunsChestionarId",
+                    raspunsChestionarId
+            );
+
+            return "medic/pregatire-raport";
+        }
+
+        RezultatScoring rezultat = scorExistent.get();
+
+        List<RaspunsuriIntrebari> raspunsuriDetaliate =
+                raspunsuriIntrebariService.getRaspunsuriDetaliate(
+                        raspunsChestionarId
+                );
+
+        Map<String, List<RaspunsuriIntrebari>> raspunsuriPeCategorii =
+                new LinkedHashMap<>();
+
+        Map<String, CategoriiChestionare> categoriiMap =
+                new LinkedHashMap<>();
+
+        for (RaspunsuriIntrebari raspuns : raspunsuriDetaliate) {
+            CategoriiChestionare categorie = raspuns.getCategorie();
+
+            String numeCategorie = categorie != null
+                    ? categorie.getNume()
+                    : "Fără categorie";
+
+            raspunsuriPeCategorii
+                    .computeIfAbsent(
+                            numeCategorie,
+                            cheie -> new ArrayList<>()
+                    )
+                    .add(raspuns);
+
+            if (categorie != null) {
+                categoriiMap.putIfAbsent(numeCategorie, categorie);
+            }
+        }
+
         auditService.inregistreaza(
-                auditService.utilizatorCurent(session),
+                utilizatorCurent.getId(),
                 AuditLog.ActiuneAudit.VIZUALIZARE,
                 AuditLog.TipResursa.CHESTIONAR,
                 raspunsChestionarId,
-                pacient != null ? pacient.getId() : null
+                pacient.getId()
         );
-
-        // Calculează (sau reutilizează, dacă e deja valid) scorul pe categorii
-        RezultatScoring rezultat = scoringService.calculeazaSiSalveazaScor(raspunsChestionarId);
-
-        List<RaspunsuriIntrebari> raspunsuriDetaliate = raspunsuriIntrebariService
-                .getRaspunsuriDetaliate(raspunsChestionarId);
-
-        // Grupare după NUMELE categoriei (nu UUID), fiindcă rezultat.scoruriCategorii
-        // și celelalte map-uri din RezultatScoring sunt indexate după nume.
-        // LinkedHashMap păstrează ordinea categoriilor din chestionar.
-        Map<String, List<RaspunsuriIntrebari>> raspunsuriPeCategorii = new LinkedHashMap<>();
-        for (RaspunsuriIntrebari raspuns : raspunsuriDetaliate) {
-            String numeCategorie = (raspuns.getCategorie() != null)
-                    ? raspuns.getCategorie().getNume()
-                    : "Fără Categorie";
-
-            raspunsuriPeCategorii
-                    .computeIfAbsent(numeCategorie, k -> new ArrayList<>())
-                    .add(raspuns);
-        }
-
-        // Map nume categorie -> entitate, necesar în template pentru a distinge
-        // categoriile evaluabile (cu scor) de cele informative
-        Map<String, CategoriiChestionare> categoriiMap = new LinkedHashMap<>();
-        for (RaspunsuriIntrebari raspuns : raspunsuriDetaliate) {
-            CategoriiChestionare categorie = raspuns.getCategorie();
-            if (categorie != null) {
-                categoriiMap.putIfAbsent(categorie.getNume(), categorie);
-            }
-        }
 
         model.addAttribute("chestionar", raspunsChestionar);
         model.addAttribute("rezultat", rezultat);
         model.addAttribute("raspunsuriPeCategorii", raspunsuriPeCategorii);
         model.addAttribute("categoriiMap", categoriiMap);
-        model.addAttribute("medicId", session.getAttribute("userId"));
+        model.addAttribute("medicId", utilizatorCurent.getId());
 
         return "medic/vizualizare-rezultate";
     }
 
-    /**
-     * Generează raport PDF cu vizualizare
-     */
-    @GetMapping("/raport/visual/{raspunsChestionarId}")
-    public ResponseEntity<byte[]> genereazaRaportVisual(
-            @PathVariable UUID raspunsChestionarId,
-            HttpSession session) throws IOException {
-
-        RaspunsuriChestionare raspunsChestionar =
-                raspunsuriChestionareRepository
-                        .findByIdForCompletare(raspunsChestionarId)
-                        .orElseThrow(() ->
-                                new NotFoundException("Chestionarul nu a fost găsit."));
-
-        if (raspunsChestionar.getPacient() == null) {
-            throw new NotFoundException("Pacientul asociat nu a fost găsit.");
-        }
-
-        UUID pacientId = raspunsChestionar.getPacient().getId();
-
-        accesPacientService.verificaAccesMedic(session, pacientId);
-
-        byte[] pdf = raportGeneratorService.genereazaPdf(raspunsChestionarId);
-
-        auditService.inregistreaza(
-                auditService.utilizatorCurent(session),
-                AuditLog.ActiuneAudit.EXPORT,
-                AuditLog.TipResursa.CHESTIONAR,
-                raspunsChestionarId,
-                pacientId
-        );
-
-        String numeFisier = "raport-chestionar-" + raspunsChestionarId + ".pdf";
-
-        return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
-                .cacheControl(CacheControl.noStore())
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment()
-                                .filename(numeFisier)
-                                .build()
-                                .toString()
-                )
-                .body(pdf);
-    }
     /**
      * Afișează toate tipurile de chestionare disponibile în sistem (pentru medici).
      * Nu conține date de pacient, deci nu se auditează.
@@ -385,37 +399,37 @@ public class ChestionarController {
             HttpSession session,
             RedirectAttributes redirectAttributes) {
 
-        RevizuireChestionarService.RezultatRevizuire rezultat =
-                revizuireChestionarService.marcheazaCaRevizuit(
-                        raspunsChestionarId,
-                        session
-                );
+        UUID utilizatorId = accesContService.utilizatorCurent().getId();
+
+        var rezultat = revizuireChestionarService.marcheazaCaRevizuit(
+                raspunsChestionarId,
+                session
+        );
 
         if (rezultat.modificat()) {
             auditService.inregistreaza(
-                    auditService.utilizatorCurent(session),
+                    utilizatorId,
                     AuditLog.ActiuneAudit.MODIFICARE,
                     AuditLog.TipResursa.CHESTIONAR,
                     raspunsChestionarId,
                     rezultat.pacientId()
             );
-
-            redirectAttributes.addFlashAttribute(
-                    "success",
-                    "Evaluarea a fost marcată ca revizuită."
-            );
-        } else {
-            redirectAttributes.addFlashAttribute(
-                    "success",
-                    "Evaluarea era deja marcată ca revizuită."
-            );
         }
 
+        redirectAttributes.addFlashAttribute(
+                "success",
+                rezultat.modificat()
+                        ? "Evaluarea a fost marcată ca revizuită."
+                        : "Evaluarea era deja marcată ca revizuită."
+        );
+
         return "redirect:/medic/"
-                + session.getAttribute("userId")
+                + utilizatorId
                 + "/pacient/"
                 + rezultat.pacientId();
     }
+
+
     // ========== METODE HELPER ==========
 
     /**
@@ -458,5 +472,54 @@ public class ChestionarController {
         return raspunsuriChestionareRepository.findById(raspunsChestionarId)
                 .map(rc -> rc.getPacient() != null ? rc.getPacient().getId() : null)
                 .orElse(null);
+    }
+
+    @PostMapping("/medic/pregateste-raport/{raspunsChestionarId}")
+    public String pregatesteRaport(
+            @PathVariable UUID raspunsChestionarId,
+            HttpSession session,
+            RedirectAttributes redirectAttributes) {
+
+        UUID utilizatorId = accesContService.utilizatorCurent().getId();
+
+        PregatireRaportService.RezultatPregatire rezultat;
+
+        try {
+            rezultat = pregatireRaportService.pregateste(
+                    raspunsChestionarId,
+                    session
+            );
+        } catch (AccesInterzisException
+                 | NotFoundException
+                 | ResponseStatusException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error(
+                    "Pregătirea raportului {} a eșuat",
+                    raspunsChestionarId,
+                    e
+            );
+
+            redirectAttributes.addFlashAttribute(
+                    "error",
+                    "Raportul nu a putut fi pregătit. Încearcă din nou."
+            );
+
+            return "redirect:/chestionare/medic/vizualizare/"
+                    + raspunsChestionarId;
+        }
+
+        if (rezultat.modificat()) {
+            auditService.inregistreaza(
+                    utilizatorId,
+                    AuditLog.ActiuneAudit.MODIFICARE,
+                    AuditLog.TipResursa.CHESTIONAR,
+                    raspunsChestionarId,
+                    rezultat.pacientId()
+            );
+        }
+
+        return "redirect:/chestionare/medic/vizualizare/"
+                + raspunsChestionarId;
     }
 }

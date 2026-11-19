@@ -93,4 +93,20 @@ public interface RaspunsuriChestionareRepository extends JpaRepository<Raspunsur
             @Param("id") UUID id
     );
 
+    @Query("""
+        SELECT r
+        FROM RaspunsuriChestionare r
+        JOIN FETCH r.chestionar
+        JOIN FETCH r.pacient p
+        JOIN FETCH p.user
+        WHERE p.medic.userId = :medicId
+          AND r.status IN :statusuri
+        ORDER BY r.completatLa DESC NULLS LAST, r.id
+        """)
+    List<RaspunsuriChestionare> findRapoartePentruMedic(
+            @Param("medicId") UUID medicId,
+            @Param("statusuri")
+            List<RaspunsuriChestionare.StatusRaspuns> statusuri
+    );
+
 }

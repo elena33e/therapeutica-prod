@@ -34,7 +34,10 @@ public class ScoringService {
 
         // 1. Verificare existență și status recalculare
         Optional<RezultatScoring> existent = rezultatScoringRepository.findByRaspunsChestionarId(raspunsChestionarId);
-        if (existent.isPresent() && !existent.get().getNecesitaRecalculare()) {
+        if (existent.isPresent()
+                && Boolean.FALSE.equals(
+                existent.get().getNecesitaRecalculare()
+        )) {
             log.info("Rezultat valid deja existent. Abandonare calcul.");
             return existent.get();
         }
@@ -160,16 +163,17 @@ public class ScoringService {
     }
 
     private int getNumarTotalIntrebari(UUID chestionarId) {
-        String sql = "SELECT COUNT(i.id) FROM intrebari i " +
-                "JOIN categorii_chestionare cc ON i.categorie_id = cc.id " +
-                "WHERE cc.chestionar_id = :id";
-        try {
-            return ((Number) entityManager.createNativeQuery(sql)
-                    .setParameter("id", chestionarId)
-                    .getSingleResult()).intValue();
-        } catch (Exception e) {
-            return 0;
-        }
+        String sql = """
+            SELECT COUNT(i.id)
+            FROM intrebari i
+            JOIN categorii_chestionare cc ON i.categorie_id = cc.id
+            WHERE cc.chestionar_id = :id
+            """;
+
+        return ((Number) entityManager.createNativeQuery(sql)
+                .setParameter("id", chestionarId)
+                .getSingleResult())
+                .intValue();
     }
 
     // Metodele utilitare rămân neschimbate...

@@ -1,5 +1,6 @@
 package com.therapeutica.therapeutica_app.chestionare;
 
+import com.therapeutica.therapeutica_app.raport_chestionar.RezultatScoringRepository;
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionare;
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionareRepository;
 import com.therapeutica.therapeutica_app.security.AccesPacientService;
@@ -18,6 +19,7 @@ import java.util.UUID;
 public class RevizuireChestionarService {
 
     private final RaspunsuriChestionareRepository chestionareRepository;
+    private final RezultatScoringRepository rezultateRepository;
     private final AccesPacientService accesPacientService;
 
     public record RezultatRevizuire(
@@ -33,12 +35,14 @@ public class RevizuireChestionarService {
         RaspunsuriChestionare chestionar = chestionareRepository
                 .findByIdForUpdate(raspunsChestionarId)
                 .orElseThrow(() ->
-                        new NotFoundException("Chestionarul nu a fost găsit.")
+                        new NotFoundException(
+                                "Chestionarul nu a fost găsit."
+                        )
                 );
 
         if (chestionar.getPacient() == null) {
             throw new NotFoundException(
-                    "Pacientul asociat chestionarului nu a fost găsit."
+                    "Pacientul asociat nu a fost găsit."
             );
         }
 
@@ -46,19 +50,32 @@ public class RevizuireChestionarService {
 
         accesPacientService.verificaAccesMedic(session, pacientId);
 
-        // O cerere repetată nu produce o nouă modificare.
         if (chestionar.getStatus()
                 == RaspunsuriChestionare.StatusRaspuns.REVIZUIT) {
-
             return new RezultatRevizuire(pacientId, false);
         }
 
         if (chestionar.getStatus()
                 != RaspunsuriChestionare.StatusRaspuns.COMPLETAT) {
-
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Poate fi revizuit doar un chestionar completat."
+            );
+        }
+
+        boolean scorValid = rezultateRepository
+                .findByRaspunsChestionarId(raspunsChestionarId)
+                .filter(rezultat ->
+                        Boolean.FALSE.equals(
+                                rezultat.getNecesitaRecalculare()
+                        )
+                )
+                .isPresent();
+
+        if (!scorValid) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Pregătește raportul înainte de revizuire."
             );
         }
 

@@ -101,8 +101,11 @@ public class PacientiMedicController {
 
         } catch (Exception e) {
             log.error("❌ Eroare la obținerea listei pacienților: {}", e.getMessage(), e);
-            model.addAttribute("error", "Eroare la încărcarea listei pacienților: " + e.getMessage());
-            return "medic/error";
+            model.addAttribute(
+                    "error",
+                    "Lista pacienților nu poate fi afișată momentan."
+            );
+            return "error";
         }
     }
 
@@ -202,8 +205,11 @@ public class PacientiMedicController {
 
         } catch (Exception e) {
             log.error("Eroare la obținerea detaliilor pacientului: {}", e.getMessage(), e);
-            model.addAttribute("error", "Eroare: " + e.getMessage());
-            return "medic/error";
+            model.addAttribute(
+                    "error",
+                    "Datele pacientului nu pot fi afișate momentan."
+            );
+            return "error";
         }
     }
 

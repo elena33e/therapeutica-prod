@@ -72,6 +72,18 @@ public class SecurityConfig {
                         .requestMatchers("/api", "/api/**").denyAll()
 
                         .requestMatchers(
+                                "/chestionare/raport",
+                                "/chestionare/raport/**",
+                                "/chestionare/rezultate",
+                                "/chestionare/rezultate/**",
+                                "/raspunsuri-chestionare",
+                                "/raspunsuri-chestionare/**",
+                                "/medic/*/pacienti-neevaluati",
+                                "/medic/*/pacient/*/chestionare",
+                                "/medic/*/chestionar/*/rezultate"
+                        ).denyAll()
+
+                        .requestMatchers(
                                 "/debug-env",
                                 "/debug-env/**"
                         ).denyAll()
@@ -95,6 +107,7 @@ public class SecurityConfig {
                                 "/inregistrare",
                                 "/css/**",
                                 "/js/**",
+                                "/fonts/**",
                                 "/images/**",
                                 "/error",
                                 "/resetare-parola/**"

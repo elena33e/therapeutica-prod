@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:layout="http://www.ultraq.net.nz/thymeleaf/layout"
+      layout:decorate="~{layout}">
+<head>
+    <title>Rapoarte | Therapeutica</title>
+</head>
+<body>
+<div layout:fragment="content"
+     class="max-w-7xl mx-auto px-4 py-8 space-y-6">
+
+    <div>
+        <h1 class="text-3xl font-bold text-brand-navy">Rapoarte</h1>
+        <p class="text-gray-500 mt-2">
+            Chestionarele completate și revizuite ale pacienților tăi.
+        </p>
+    </div>
+
+    <div th:if="${#lists.isEmpty(rapoarte)}"
+         class="bg-white rounded-xl border border-gray-200 p-10 text-center text-gray-500">
+        Nu există încă rapoarte disponibile.
+    </div>
+
+    <div th:unless="${#lists.isEmpty(rapoarte)}"
+         class="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+        <table class="w-full text-left">
+            <thead class="bg-gray-100 text-brand-navy">
+            <tr>
+                <th class="px-5 py-4">Pacient</th>
+                <th class="px-5 py-4">Chestionar</th>
+                <th class="px-5 py-4">Completat la</th>
+                <th class="px-5 py-4">Status</th>
+                <th class="px-5 py-4">Acțiune</th>
+            </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+            <tr th:each="raport : ${rapoarte}">
+                <td class="px-5 py-4 font-medium"
+                    th:text="${raport.pacient.user.nume + ' ' + raport.pacient.user.prenume}">
+                    Pacient
+                </td>
+                <td class="px-5 py-4"
+                    th:text="${raport.chestionar.nume}">
+                    Chestionar
+                </td>
+                <td class="px-5 py-4"
+                    th:text="${raport.completatLa != null
+                        ? #temporals.format(raport.completatLa, 'dd.MM.yyyy HH:mm')
+                        : '—'}">
+                    Data
+                </td>
+                <td class="px-5 py-4"
+                    th:text="${raport.status.name() == 'REVIZUIT'
+                        ? 'Revizuit'
+                        : 'Necesită revizuire'}">
+                    Status
+                </td>
+                <td class="px-5 py-4">
+                    <a th:href="@{/chestionare/medic/vizualizare/{id}(id=${raport.id})}"
+                       class="font-bold text-brand-blue underline">
+                        Deschide raportul
+                    </a>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>
