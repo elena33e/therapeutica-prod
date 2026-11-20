@@ -128,6 +128,21 @@
             <artifactId>flyway-database-postgresql</artifactId>
             <scope>test</scope>
         </dependency>
+
+
+        <!-- Citirea și verificarea documentelor PDF -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
+        </dependency>
+
+        <!-- Suport WebP pentru ImageIO -->
+        <dependency>
+            <groupId>com.twelvemonkeys.imageio</groupId>
+            <artifactId>imageio-webp</artifactId>
+            <version>3.15.3</version>
+        </dependency>
     </dependencies>
 
     <build>

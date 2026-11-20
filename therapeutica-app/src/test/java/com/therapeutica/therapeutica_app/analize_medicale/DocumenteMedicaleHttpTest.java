@@ -58,6 +58,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.therapeutica.therapeutica_app.notificari.Notificare;
+import com.therapeutica.therapeutica_app.notificari.NotificareRepository;
+
 @SpringBootTest(properties = {
         "spring.config.location=classpath:/application-http-test.yml"
 })
@@ -88,6 +91,8 @@ class DocumenteMedicaleHttpTest {
     @DynamicPropertySource
     static void configureazaStocarea(DynamicPropertyRegistry registry) {
         registry.add("app.storage.documents-dir", DOCUMENTE::toString);
+        registry.add("app.storage.max-file-bytes", () -> MAX_FISIER_TEST);
+        registry.add("app.storage.max-document-bytes", () -> MAX_DOCUMENT_TEST);
     }
 
     @Autowired
@@ -105,12 +110,20 @@ class DocumenteMedicaleHttpTest {
     @MockitoSpyBean
     private DocumentMedicalRepository documentRepository;
 
+    @MockitoSpyBean
+    private FisierDocumentMedicalRepository fisierRepository;
+
+    @MockitoSpyBean
+    private NotificareRepository notificareRepository;
+
     private final Map<String, UUID> utilizatori = new HashMap<>();
 
     private final UUID pacientA = UUID.randomUUID();
     private final UUID pacientB = UUID.randomUUID();
     private final UUID documentVechi = UUID.randomUUID();
     private final UUID documentImagini = UUID.randomUUID();
+    private static final int MAX_FISIER_TEST = 4096;
+    private static final int MAX_DOCUMENT_TEST = 8192;
 
     private Path fisierVechi;
     private byte[] primaImagine;
@@ -291,23 +304,36 @@ class DocumenteMedicaleHttpTest {
                 .andExpect(flash().attributeExists("success"));
 
         UUID documentNou = idDocumentNou();
-        Path folder = caleDocument(documentNou);
 
+        var fisiere = fisiereInregistrate(documentNou);
+        assertThat(fisiere).hasSize(1);
+
+        var fisier = fisiere.get(0);
+        String cheie = fisier.get("cheie_stocare").toString();
+
+        assertThat(Path.of(cheie).isAbsolute()).isFalse();
+        assertThat(cheie).startsWith(documentNou + "/");
+        assertThat(fisier.get("nume_original")).isEqualTo("analiza.pdf");
+        assertThat(fisier.get("nume_afisat")).isEqualTo("analiza.pdf");
+        assertThat(fisier.get("tip_media")).isEqualTo("application/pdf");
+        assertThat(fisier.get("dimensiune_octeti"))
+                .isEqualTo((long) original.length);
+        assertThat(fisier.get("ordine")).isEqualTo(1);
+        assertThat(fisier.get("sha256")).isEqualTo(sha256(original));
+
+        Path folder = caleDocument(documentNou);
         assertThat(folder).startsWith(DOCUMENTE);
 
         try (var continut = Files.list(folder)) {
             assertThat(continut.map(p -> p.getFileName().toString()).toList())
-                    .containsExactly("0001_analiza.pdf");
+                    .containsExactly(Path.of(cheie).getFileName().toString());
         }
 
-        assertThat(Files.readAllBytes(
-                folder.resolve("0001_analiza.pdf")
-        )).isEqualTo(original);
+        assertThat(Files.readAllBytes(DOCUMENTE.resolve(cheie)))
+                .isEqualTo(original);
 
         for (String cont : List.of("pacient-a", "medic-a")) {
-            mvc.perform(get(
-                            "/documente/{id}/fisier", documentNou
-                    )
+            mvc.perform(get("/documente/{id}/fisier", documentNou)
                             .param("descarcare", "true")
                             .session(login(cont)))
                     .andExpect(status().isOk())
@@ -326,6 +352,8 @@ class DocumenteMedicaleHttpTest {
     void incarcareaMaiMultorImaginiPastreazaOrdineaSiNumeleSigure()
             throws Exception {
 
+        MockHttpSession sesiune = login("pacient-a");
+
         mvc.perform(multipart("/analize/incarca")
                         .file(new MockMultipartFile(
                                 "files", "../../z.png",
@@ -336,30 +364,49 @@ class DocumenteMedicaleHttpTest {
                                 "image/png", aDouaImagine
                         ))
                         .param("pacientId", id("pacient-a").toString())
-                        .session(login("pacient-a"))
+                        .session(sesiune)
                         .with(csrf()))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(flash().attributeExists("success"));
 
         UUID documentNou = idDocumentNou();
-        Path folder = caleDocument(documentNou);
+        var fisiere = fisiereInregistrate(documentNou);
 
-        assertThat(folder).startsWith(DOCUMENTE);
+        assertThat(fisiere).hasSize(2);
+        assertThat(fisiere.get(0).get("nume_afisat")).isEqualTo("z.png");
+        assertThat(fisiere.get(1).get("nume_afisat")).isEqualTo("a.png");
+        assertThat(fisiere.get(0).get("nume_original")).isEqualTo("z.png");
+        assertThat(fisiere.get(1).get("nume_original")).isEqualTo("a.png");
 
-        try (var continut = Files.list(folder)) {
-            assertThat(continut
-                    .map(p -> p.getFileName().toString())
-                    .sorted()
-                    .toList())
-                    .containsExactly("0001_z.png", "0002_a.png");
+        byte[][] originale = {primaImagine, aDouaImagine};
+
+        for (int index = 0; index < originale.length; index++) {
+            var fisier = fisiere.get(index);
+            String cheie = fisier.get("cheie_stocare").toString();
+
+            assertThat(cheie).startsWith(documentNou + "/");
+            assertThat(fisier.get("ordine")).isEqualTo(index + 1);
+            assertThat(fisier.get("sha256"))
+                    .isEqualTo(sha256(originale[index]));
+
+            assertThat(Files.readAllBytes(DOCUMENTE.resolve(cheie)))
+                    .isEqualTo(originale[index]);
+
+            mvc.perform(get("/documente/{id}/fisier", documentNou)
+                            .param("index", Integer.toString(index))
+                            .session(sesiune))
+                    .andExpect(status().isOk())
+                    .andExpect(content().bytes(originale[index]));
         }
 
-        assertThat(Files.readAllBytes(folder.resolve("0001_z.png")))
-                .isEqualTo(primaImagine);
+        mvc.perform(get("/documente/{id}/sursa", documentNou)
+                        .session(sesiune))
+                .andExpect(status().isOk())
+                .andExpect(model().attribute(
+                        "numeFisiere", List.of("z.png", "a.png")
+                ));
 
-        assertThat(Files.readAllBytes(folder.resolve("0002_a.png")))
-                .isEqualTo(aDouaImagine);
-
+        assertThat(caleDocument(documentNou)).startsWith(DOCUMENTE);
         assertThat(numarDocumente()).isEqualTo(3L);
     }
 
@@ -643,26 +690,97 @@ class DocumenteMedicaleHttpTest {
     private void insereazaDocument(
             UUID documentId,
             Path cale,
-            String nume) {
+            String nume) throws IOException {
 
         jdbc.update("""
-                INSERT INTO public.documente_medicale
-                    (id, pacient_id, nume_fisier, cale_fisier_stocare,
-                     data_incarcare, status, version)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'INCARCAT', 0)
+            INSERT INTO public.documente_medicale
+                (id, pacient_id, nume_fisier, cale_fisier_stocare,
+                 data_incarcare, status, version)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, 'INCARCAT', 0)
+            """,
+                documentId, pacientA, nume, documentId.toString());
+
+        List<Path> fisiere;
+
+        if (Files.isDirectory(cale)) {
+            try (var continut = Files.list(cale)) {
+                fisiere = continut
+                        .filter(path -> Files.isRegularFile(path))
+                        .sorted(java.util.Comparator.comparing(
+                                path -> path.getFileName().toString()
+                        ))
+                        .toList();
+            }
+        } else {
+            fisiere = List.of(cale);
+        }
+
+        for (int index = 0; index < fisiere.size(); index++) {
+            Path fisier = fisiere.get(index);
+            byte[] continut = Files.readAllBytes(fisier);
+
+            String cheie = DOCUMENTE.relativize(fisier)
+                    .toString()
+                    .replace('\\', '/');
+
+            jdbc.update("""
+                INSERT INTO public.fisiere_documente_medicale
+                    (id, document_id, cheie_stocare, nume_afisat,
+                     tip_media, dimensiune_octeti, ordine, sha256)
+                VALUES (?, ?, ?, ?, 'image/png', ?, ?, ?)
                 """,
-                documentId, pacientA, nume, cale.toString());
+                    UUID.randomUUID(),
+                    documentId,
+                    cheie,
+                    fisier.getFileName().toString(),
+                    (long) continut.length,
+                    index + 1,
+                    sha256(continut));
+        }
+    }
+
+    private static String sha256(byte[] continut) {
+        try {
+            return java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256")
+                            .digest(continut)
+            );
+        } catch (java.security.NoSuchAlgorithmException eroare) {
+            throw new IllegalStateException(eroare);
+        }
+    }
+
+    private List<Map<String, Object>> fisiereInregistrate(UUID documentId) {
+        return jdbc.queryForList("""
+            SELECT id, cheie_stocare, nume_original, nume_afisat,
+                   tip_media, dimensiune_octeti, ordine, sha256
+            FROM public.fisiere_documente_medicale
+            WHERE document_id = ?
+            ORDER BY ordine
+            """, documentId);
     }
 
     private void verificaDocumenteNemodificate(Set<Path> inventarInitial)
             throws IOException {
 
         assertThat(numarDocumente()).isEqualTo(2L);
+
+        assertThat(jdbc.queryForObject("""
+            SELECT COUNT(*)
+            FROM public.fisiere_documente_medicale
+            """, Long.class)).isEqualTo(3L);
+
+        assertThat(jdbc.queryForObject("""
+            SELECT COUNT(*)
+            FROM public.notificari
+            """, Long.class)).isEqualTo(0L);
+
         assertThat(statusDocument(documentVechi)).isEqualTo("INCARCAT");
         assertThat(statusDocument(documentImagini)).isEqualTo("INCARCAT");
         assertThat(inventarStocare()).isEqualTo(inventarInitial);
         assertThat(Files.readAllBytes(fisierVechi)).isEqualTo(primaImagine);
     }
+
 
     private Set<Path> inventarStocare() throws IOException {
         try (var continut = Files.walk(DOCUMENTE)) {
@@ -682,11 +800,14 @@ class DocumenteMedicaleHttpTest {
 
     private Path caleDocument(UUID documentId) {
         String cale = jdbc.queryForObject("""
-                SELECT cale_fisier_stocare
-                FROM public.documente_medicale WHERE id = ?
-                """, String.class, documentId);
+            SELECT cale_fisier_stocare
+            FROM public.documente_medicale
+            WHERE id = ?
+            """, String.class, documentId);
 
-        return Path.of(cale).toAbsolutePath().normalize();
+        assertThat(Path.of(cale).isAbsolute()).isFalse();
+
+        return DOCUMENTE.resolve(cale).normalize();
     }
 
     private String statusDocument(UUID documentId) {
@@ -791,5 +912,344 @@ class DocumenteMedicaleHttpTest {
                 .append("\n%%EOF\n");
 
         return pdf.toString().getBytes(StandardCharsets.US_ASCII);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"png", "pdf"})
+    void textulRedenumitCaDocumentEsteRefuzat(String extensie)
+            throws Exception {
+
+        Set<Path> initial = inventarStocare();
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(new MockMultipartFile(
+                                "files",
+                                "analiza." + extensie,
+                                extensie.equals("pdf")
+                                        ? "application/pdf"
+                                        : "image/png",
+                                "<html>Nu este un document valid.</html>"
+                                        .getBytes(StandardCharsets.UTF_8)
+                        ))
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void imagineaPngRedenumitaJpgEsteRefuzata() throws Exception {
+        Set<Path> initial = inventarStocare();
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(new MockMultipartFile(
+                                "files",
+                                "analiza.jpg",
+                                "image/jpeg",
+                                primaImagine
+                        ))
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Extensia fișierului nu corespunde conținutului său."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void alDoileaFisierInvalidAnuleazaIntreagaIncarcare()
+            throws Exception {
+
+        Set<Path> initial = inventarStocare();
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(fisierImagine())
+                        .file(new MockMultipartFile(
+                                "files",
+                                "invalid.pdf",
+                                "application/pdf",
+                                "%PDF-1.7\ncontinut invalid\n%%EOF"
+                                        .getBytes(StandardCharsets.US_ASCII)
+                        ))
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void maiMultDeZeceFisiereSuntRefuzate() throws Exception {
+        Set<Path> initial = inventarStocare();
+        var cerere = multipart("/analize/incarca");
+
+        for (int index = 0; index < 11; index++) {
+            cerere.file(fisierImagine());
+        }
+
+        mvc.perform(cerere
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Sunt permise cel mult 10 fișiere într-un document."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void limitaFisieruluiFolosesteOctetiiCititi() throws Exception {
+        Set<Path> initial = inventarStocare();
+
+        MockMultipartFile fisier = new MockMultipartFile(
+                "files",
+                "analiza.png",
+                "image/png",
+                new byte[MAX_FISIER_TEST + 1]
+        ) {
+            @Override
+            public long getSize() {
+                return 1;
+            }
+        };
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(fisier)
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Un fișier depășește dimensiunea maximă permisă."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void totalulDeclaratPesteLimitaEsteRefuzat() throws Exception {
+        Set<Path> initial = inventarStocare();
+        var cerere = multipart("/analize/incarca");
+
+        byte[] continut = new byte[MAX_FISIER_TEST];
+
+        for (int index = 0; index < 3; index++) {
+            cerere.file(new MockMultipartFile(
+                    "files",
+                    "analiza-" + index + ".png",
+                    "image/png",
+                    continut
+            ));
+        }
+
+        mvc.perform(cerere
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Documentul depășește dimensiunea totală permisă."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void totalulRealPesteLimitaAnuleazaFisiereleDejaScrise()
+            throws Exception {
+
+        Set<Path> initial = inventarStocare();
+        var cerere = multipart("/analize/incarca");
+
+        byte[] imagineCuPadding = java.util.Arrays.copyOf(
+                primaImagine,
+                MAX_FISIER_TEST
+        );
+
+        for (int index = 0; index < 3; index++) {
+            cerere.file(new MockMultipartFile(
+                    "files",
+                    "analiza-" + index + ".png",
+                    "image/png",
+                    imagineCuPadding
+            ) {
+                @Override
+                public long getSize() {
+                    return 1;
+                }
+            });
+        }
+
+        mvc.perform(cerere
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Documentul depășește dimensiunea totală permisă."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void fisierulCuNumeDarFaraContinutEsteRefuzat() throws Exception {
+        Set<Path> initial = inventarStocare();
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(new MockMultipartFile(
+                                "files",
+                                "analiza.pdf",
+                                "application/pdf",
+                                new byte[0]
+                        ))
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attribute(
+                        "error",
+                        "Fișierele goale nu sunt acceptate."
+                ));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void eroareaSalvariiEvidenteiAnuleazaDocumentulSiFisierele()
+            throws Exception {
+
+        Set<Path> initial = inventarStocare();
+
+        doThrow(new DataIntegrityViolationException(
+                "Eroare simulată la salvarea evidenței"
+        )).when(fisierRepository).saveAllAndFlush(any());
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(fisierImagine())
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+
+        verificaDocumenteNemodificate(initial);
+    }
+
+    @Test
+    void fisierulModificatPeDiscNuEsteLivrat() throws Exception {
+        byte[] modificat = primaImagine.clone();
+        modificat[modificat.length - 1] ^= 1;
+
+        Files.write(fisierVechi, modificat);
+
+        mvc.perform(get("/documente/{id}/fisier", documentVechi)
+                        .session(login("pacient-a")))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void incarcareaCreeazaONotificareDoarMediculuiAlocat()
+            throws Exception {
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(fisierImagine())
+                        .file(new MockMultipartFile(
+                                "files",
+                                "a_doua.png",
+                                "image/png",
+                                aDouaImagine
+                        ))
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("success"));
+
+        UUID documentNou = idDocumentNou();
+        String link = "/documente/" + documentNou + "/sursa";
+
+        var notificari = jdbc.queryForList("""
+            SELECT id, utilizator_destinatar_id, link_actiune, citita
+            FROM public.notificari
+            ORDER BY id
+            """);
+
+        // Două fișiere într-un document produc o singură notificare.
+        assertThat(notificari).hasSize(1);
+
+        var notificare = notificari.get(0);
+
+        assertThat(notificare.get("utilizator_destinatar_id"))
+                .isEqualTo(id("medic-a"));
+        assertThat(notificare.get("link_actiune")).isEqualTo(link);
+        assertThat(notificare.get("citita")).isEqualTo(false);
+
+        MockHttpSession medic = login("medic-a");
+
+        mvc.perform(get(
+                        "/api/notificari/necitite-count/{id}",
+                        id("medic-a")
+                ).session(medic))
+                .andExpect(status().isOk())
+                .andExpect(content().string("1"));
+
+        long notificareId = ((Number) notificare.get("id")).longValue();
+
+        mvc.perform(post(
+                        "/api/notificari/acceseaza/{id}",
+                        notificareId
+                )
+                        .session(medic)
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl(link));
+
+        mvc.perform(get(link).session(medic))
+                .andExpect(status().isOk());
+
+        mvc.perform(get(
+                        "/api/notificari/necitite-count/{id}",
+                        id("medic-a")
+                ).session(medic))
+                .andExpect(status().isOk())
+                .andExpect(content().string("0"));
+    }
+
+    @Test
+    void eroareaSalvariiNotificariiAnuleazaIntreagaIncarcare()
+            throws Exception {
+
+        Set<Path> initial = inventarStocare();
+
+        doThrow(new DataIntegrityViolationException(
+                "Eroare simulată la salvarea notificării"
+        )).when(notificareRepository)
+                .saveAndFlush(any(Notificare.class));
+
+        mvc.perform(multipart("/analize/incarca")
+                        .file(fisierImagine())
+                        .param("pacientId", id("pacient-a").toString())
+                        .session(login("pacient-a"))
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(flash().attributeExists("error"));
+
+        verificaDocumenteNemodificate(initial);
     }
 }
