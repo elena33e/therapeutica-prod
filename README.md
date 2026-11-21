@@ -61,9 +61,30 @@ Configurația destinată producției trebuie să folosească `spring.jpa.hiberna
 
 ## Migrări
 
-Migrările V1 și V2 se află în `src/main/resources/db/migration`.
+Migrările V1, V2 și V3 se află în `therapeutica-app/src/main/resources/db/migration`.
 
-Flyway este momentan disponibil doar în teste. Aplicarea migrărilor pe baza existentă este o etapă separată, care necesită backup și verificarea procedurii de recuperare.
+Aplicația folosește `spring.jpa.hibernate.ddl-auto: validate`. Dependențele Flyway ale aplicației au `scope=test`; pornirea serverului web nu execută migrări.
+
+Administrarea explicită folosește profilul Maven `migrari`, configurat prin:
+
+- `THERAPEUTICA_MIGRARI_DB_URL`
+- `THERAPEUTICA_MIGRARI_DB_USER`
+- `THERAPEUTICA_MIGRARI_DB_PASSWORD`
+
+Din directorul modulului Maven, starea se verifică folosind `.\mvnw.cmd -Pmigrari flyway:info` în PowerShell sau `bash mvnw -Pmigrari flyway:info` în Linux.
+
+Aplicarea migrărilor se face explicit prin `flyway:migrate`, după verificarea destinației și a backupului. Înregistrarea unui baseline necesită verificarea prealabilă a structurii și datelor. `baseline-on-migrate` este dezactivat, iar operația `clean` este blocată.
+
+Scripturile operaționale sunt în `scripts/db`:
+
+- `pregatire-adoptare-v3.sql`: pregătește o schemă istorică V1 cu V3 aplicată manual și fără istoric Flyway. Include V2 originală și verifică păstrarea datelor într-o singură tranzacție.
+- `configurare-roluri-v3.sql`: configurează proprietarii și drepturile unei baze verificate la versiunea 3.
+
+Ambele scripturi primesc parametrul psql `baza_asteptata` și refuză o bază diferită.
+
+Contul `therapeutica_migrari_user` deține schema. Contul `therapeutica_aplicatie_user` are drepturile necesare datelor aplicației, fără drepturi de modificare a structurii sau acces la istoricul Flyway. Drepturile pentru obiectele viitoare se acordă explicit în migrările respective.
+
+Testele operaționale rulează exclusiv pe PostgreSQL temporar și verifică adoptarea, păstrarea datelor, rollbackul, refuzul bazei greșite și separarea drepturilor.
 
 ## Proveniența codului
 
@@ -82,3 +103,5 @@ Administratorul invită medici, iar medicii invită pacienți. Activarea creeaz�
 Primul administrator se creează explicit prin comanda `creare-administrator`, executată din JAR-ul aplicației. Comanda primește proprietățile `admin.email`, `admin.nume` și `admin.prenume`. Parola se transmite prin variabila de mediu `THERAPEUTICA_ADMIN_PASSWORD`.
 
 Comanda folosește configurația conexiunii PostgreSQL a profilului selectat. Nu pornește serverul web și nu execută migrări. Dacă există deja un administrator, nu creează altul și nu modifică parolele sau rolurile conturilor existente.
+
+Comenzile operator `creare-administrator` și `migrare-documente` blochează tabele și necesită o configurație de conexiune dedicată, cu drepturile contului de migrări. Serverul web folosește contul limitat al aplicației.

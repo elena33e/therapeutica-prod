@@ -198,4 +198,61 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>migrari</id>
+
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.flywaydb</groupId>
+                        <artifactId>flyway-maven-plugin</artifactId>
+                        <version>${flyway.version}</version>
+
+                        <configuration>
+                            <url>${env.THERAPEUTICA_MIGRARI_DB_URL}</url>
+                            <user>${env.THERAPEUTICA_MIGRARI_DB_USER}</user>
+                            <password>${env.THERAPEUTICA_MIGRARI_DB_PASSWORD}</password>
+
+                            <defaultSchema>public</defaultSchema>
+
+                            <schemas>
+                                <schema>public</schema>
+                            </schemas>
+
+                            <table>flyway_schema_history</table>
+
+                            <locations>
+                                <location>filesystem:${project.basedir}/src/main/resources/db/migration</location>
+                            </locations>
+
+                            <encoding>UTF-8</encoding>
+                            <baselineOnMigrate>false</baselineOnMigrate>
+                            <cleanDisabled>true</cleanDisabled>
+                            <createSchemas>false</createSchemas>
+                            <validateOnMigrate>true</validateOnMigrate>
+                            <validateMigrationNaming>true</validateMigrationNaming>
+                            <failOnMissingLocations>true</failOnMissingLocations>
+                            <outOfOrder>false</outOfOrder>
+                        </configuration>
+
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.flywaydb</groupId>
+                                <artifactId>flyway-database-postgresql</artifactId>
+                                <version>${flyway.version}</version>
+                            </dependency>
+
+                            <dependency>
+                                <groupId>org.postgresql</groupId>
+                                <artifactId>postgresql</artifactId>
+                                <version>${postgresql.version}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
