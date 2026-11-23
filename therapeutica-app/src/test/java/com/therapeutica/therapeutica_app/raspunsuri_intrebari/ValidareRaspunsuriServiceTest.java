@@ -5,7 +5,6 @@ import com.therapeutica.therapeutica_app.categorii_chestionare.CategoriiChestion
 import com.therapeutica.therapeutica_app.chestionare.Chestionare;
 import com.therapeutica.therapeutica_app.intrebari.Intrebare;
 import com.therapeutica.therapeutica_app.intrebari.IntrebariRepository;
-import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionare;
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionareRepository;
 import jakarta.validation.Validator;
@@ -24,6 +23,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.when;
+import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 
 @ExtendWith(MockitoExtension.class)
 class ValidareRaspunsuriServiceTest {

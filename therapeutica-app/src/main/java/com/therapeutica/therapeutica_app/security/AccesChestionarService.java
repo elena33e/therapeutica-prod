@@ -2,8 +2,6 @@ package com.therapeutica.therapeutica_app.security;
 
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionare;
 import com.therapeutica.therapeutica_app.raspunsuri_chestionare.RaspunsuriChestionareRepository;
-import com.therapeutica.therapeutica_app.raspunsuri_intrebari.RaspunsuriIntrebari;
-import com.therapeutica.therapeutica_app.raspunsuri_intrebari.RaspunsuriIntrebariRepository;
 import com.therapeutica.therapeutica_app.util.AccesInterzisException;
 import com.therapeutica.therapeutica_app.util.NotFoundException;
 import jakarta.servlet.http.HttpSession;
@@ -21,7 +19,6 @@ import java.util.UUID;
 public class AccesChestionarService {
 
     private final RaspunsuriChestionareRepository chestionareRepository;
-    private final RaspunsuriIntrebariRepository raspunsuriRepository;
     private final AccesPacientService accesPacientService;
 
     public RaspunsuriChestionare incarcaPentruPacient(
@@ -69,25 +66,4 @@ public class AccesChestionarService {
         }
     }
 
-    public void verificaStergereRaspuns(
-            HttpSession session,
-            UUID raspunsIntrebareId) {
-
-        RaspunsuriIntrebari raspuns = raspunsuriRepository
-                .findById(raspunsIntrebareId)
-                .orElseThrow(() ->
-                        new NotFoundException("Răspunsul nu a fost găsit.")
-                );
-
-        if (raspuns.getRaspunsChestionar() == null) {
-            throw new NotFoundException(
-                    "Chestionarul asociat răspunsului nu a fost găsit."
-            );
-        }
-
-        verificaModificare(
-                session,
-                raspuns.getRaspunsChestionar().getId()
-        );
-    }
 }

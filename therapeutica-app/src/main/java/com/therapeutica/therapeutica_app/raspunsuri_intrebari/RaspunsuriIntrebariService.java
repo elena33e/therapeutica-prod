@@ -282,11 +282,5 @@ public class RaspunsuriIntrebariService {
         else return "Sever afectat";
     }
 
-    public void stergeRaspuns(UUID raspunsIntrebareId) {
-        raspunsuriIntrebariRepository.deleteById(raspunsIntrebareId);
-        log.info("Răspuns șters: {}", raspunsIntrebareId);
-    }
-
-
 
 }

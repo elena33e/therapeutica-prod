@@ -28,4 +28,6 @@ public interface UtilizatoriRepository extends JpaRepository<Utilizatori, UUID> 
     List<Utilizatori> findAllByMedicId(@Param("medicId") UUID medicId);
     Optional<Utilizatori> findByEmail(String email);
     boolean existsByEmail(String email);
+
+    boolean existsByEmailIgnoreCaseAndIdNot(String email, UUID id);
 }

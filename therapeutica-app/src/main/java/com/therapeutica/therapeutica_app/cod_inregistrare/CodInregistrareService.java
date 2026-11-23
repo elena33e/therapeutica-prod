@@ -21,6 +21,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.UUID;
+import com.therapeutica.therapeutica_app.util.CnpValidator;
 
 @Service
 @RequiredArgsConstructor
@@ -91,8 +92,10 @@ public class CodInregistrareService {
             return eroare(mesaj);
         }
 
-        if (!request.getCnpDestinatar().matches("[0-9]{13}")) {
-            return eroare("CNP-ul trebuie să conțină exact 13 cifre.");
+        if (!CnpValidator.esteValid(request.getCnpDestinatar())) {
+            return eroare(
+                    "CNP-ul introdus nu are o structură validă."
+            );
         }
 
         if (rolPermis == RoleType.PACIENT

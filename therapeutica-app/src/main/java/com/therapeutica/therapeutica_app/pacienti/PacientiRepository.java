@@ -18,6 +18,8 @@ public interface PacientiRepository extends JpaRepository<Pacienti, UUID> {
 
     boolean existsByCnp(String cnp);
 
+    boolean existsByCnpAndIdNot(String cnp, UUID id);
+
     Optional<Pacienti> findFirstByUserId(UUID userId);
 
     Optional<Pacienti> findByUserId(UUID userId);

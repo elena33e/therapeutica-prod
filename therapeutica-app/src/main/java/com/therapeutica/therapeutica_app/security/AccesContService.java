@@ -1,12 +1,15 @@
 package com.therapeutica.therapeutica_app.security;
 
 import com.therapeutica.therapeutica_app.util.AccesInterzisException;
+import com.therapeutica.therapeutica_app.utilizatori.RoleType;
 import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
 import com.therapeutica.therapeutica_app.utilizatori.UtilizatoriRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +48,23 @@ public class AccesContService {
         if (!rolValid) {
             throw new AccesInterzisException(
                     "Permisiunile contului s-au modificat. Reautentifică-te."
+            );
+        }
+
+        return utilizator;
+    }
+
+    public Utilizatori verificaAccesProfil(
+            UUID userIdDinUrl,
+            RoleType rolNecesar) {
+
+        Utilizatori utilizator = utilizatorCurent();
+
+        if (utilizator.getRol() != rolNecesar
+                || !utilizator.getId().equals(userIdDinUrl)) {
+
+            throw new AccesInterzisException(
+                    "Nu ai acces la acest profil."
             );
         }
 
