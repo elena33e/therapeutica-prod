@@ -52,7 +52,7 @@ class AdministrareConturiHttpTest {
 
     private static final String PAROLA = "Parola-fictiva-Test-123!";
     private static final String EMAIL_NOU = "invitat@example.test";
-    private static final String CNP_NOU = "1234567890123";
+    private static final String CNP_NOU = "1900101400012";
 
     private static final Path DOCUMENTE = Path.of(
             System.getProperty("java.io.tmpdir"),
@@ -267,7 +267,7 @@ class AdministrareConturiHttpTest {
     @Test
     void cnpInvalidNuProduceInvitatie() throws Exception {
         mvc.perform(formularInvitatie(
-                        login("ADMIN"), "MEDIC", "123"
+                        login("ADMIN"), "MEDIC", "1900101400013"
                 ).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(model().attributeExists("rezultat"));
@@ -279,12 +279,17 @@ class AdministrareConturiHttpTest {
     void cnpGresitLaActivareNuCreeazaCont() throws Exception {
         var cod = genereaza(login("ADMIN"), "MEDIC");
 
-        mvc.perform(formularActivare(cod, "9999999999999").with(csrf()))
-                .andExpect(status().isOk())
-                .andExpect(model().attributeExists("eroare"));
+        for (String cnp : new String[]{
+                "2900101400014", // Valid structural, diferit de invitație.
+                "1900101400013"  // Cifră de control greșită.
+        }) {
+            mvc.perform(formularActivare(cod, cnp).with(csrf()))
+                    .andExpect(status().isOk())
+                    .andExpect(model().attributeExists("eroare"));
 
-        verificaLipsaContuluiNou();
-        verificaCodNeutilizat(cod);
+            verificaLipsaContuluiNou();
+            verificaCodNeutilizat(cod);
+        }
     }
 
     @Test

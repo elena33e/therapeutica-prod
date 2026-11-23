@@ -13,13 +13,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 this.classList.add('border-red-500', 'ring-2', 'ring-red-200');
                 if (errorElement) {
                     errorElement.textContent = 'Format email invalid';
-                    errorElement.parentElement.classList.remove('hidden');
+                    errorElement.classList.remove('hidden');
                 }
             } else {
                 this.classList.remove('border-red-500', 'ring-2', 'ring-red-200');
                 if (errorElement) {
                     errorElement.textContent = '';
-                    errorElement.parentElement.classList.add('hidden');
+                    errorElement.classList.add('hidden');
                 }
             }
         });

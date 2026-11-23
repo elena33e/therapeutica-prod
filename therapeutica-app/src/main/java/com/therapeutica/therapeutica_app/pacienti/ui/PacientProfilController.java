@@ -1,234 +1,221 @@
 package com.therapeutica.therapeutica_app.pacienti.ui;
 
+import com.therapeutica.therapeutica_app.notificari.external.WhatsAppService;
 import com.therapeutica.therapeutica_app.pacienti.Pacienti;
 import com.therapeutica.therapeutica_app.pacienti.PacientiRepository;
+import com.therapeutica.therapeutica_app.pacienti.ProfilPacientForm;
+import com.therapeutica.therapeutica_app.pacienti.ProfilPacientService;
+import com.therapeutica.therapeutica_app.pacienti.Sex;
+import com.therapeutica.therapeutica_app.security.AccesContService;
+import com.therapeutica.therapeutica_app.util.NotFoundException;
+import com.therapeutica.therapeutica_app.utilizatori.RoleType;
 import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
-import com.therapeutica.therapeutica_app.utilizatori.UtilizatoriRepository;
-import com.therapeutica.therapeutica_app.notificari.external.WhatsAppService;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.propertyeditors.StringTrimmerEditor;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Controller
 @RequestMapping("/pacient/profil")
+@RequiredArgsConstructor
 public class PacientProfilController {
 
-    @Autowired
-    private UtilizatoriRepository utilizatoriRepository;
+    private final AccesContService accesContService;
+    private final PacientiRepository pacientiRepository;
+    private final ProfilPacientService profilPacientService;
+    private final WhatsAppService whatsappService;
 
-    @Autowired
-    private PacientiRepository pacientiRepository;
+    @InitBinder("formular")
+    public void configureazaFormular(WebDataBinder binder) {
+        binder.setAllowedFields(
+                "nume",
+                "prenume",
+                "email",
+                "cnp",
+                "dataNasterii",
+                "sex",
+                "inaltime",
+                "greutate",
+                "grupaSangvina"
+        );
 
-    @Autowired
-    private WhatsAppService whatsappService;
+        binder.registerCustomEditor(
+                String.class,
+                new StringTrimmerEditor(false)
+        );
+    }
 
-    // Vizualizare profil (F5)
     @GetMapping("/{id}")
-    public String vizualizareProfil(@PathVariable String id,
-                                    HttpSession session,
-                                    Model model) {
+    public String vizualizareProfil(
+            @PathVariable UUID id,
+            Model model) {
 
-        // Verifică autentificare și rol
-        String userIdStr = (String) session.getAttribute("userId");
+        var utilizator = accesContService.verificaAccesProfil(
+                id,
+                RoleType.PACIENT
+        );
 
+        Pacienti pacient = pacientiRepository
+                .findByUserIdWithFullData(id)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                "Profilul pacientului nu a fost găsit."
+                        )
+                );
 
-        UUID userId = UUID.fromString(userIdStr);
-
-        // Verifică dacă ID-ul din URL corespunde cu utilizatorul autentificat
-        if (!id.equals(userIdStr)) {
-            return "redirect:/pacient/profil/" + userIdStr;
-        }
-
-        // Obține utilizatorul și pacientul
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
-
-        Pacienti pacient = pacientiRepository.findByUserIdWithFullData(userId)
-                .orElseGet(() -> {
-                    Pacienti p = new Pacienti();
-                    p.setUser(utilizator); // Leagă pacientul nou de utilizatorul curent
-                    return p;
-                });
-
-        // --- LOGICA WHATSAPP ---
-        // Verificăm dacă pacientul are medic și dacă medicul are un telefon înregistrat
-        if (pacient.getMedic() != null && pacient.getMedic().getTelefon() != null) {
-            String numeMedic = pacient.getMedic().getUser() != null ? pacient.getMedic().getUser().getNume() : "";
-
-            // Construim un mesaj politicos de start
-            String mesajStart = "Bună ziua, Dr. " + numeMedic + ". Vă contactez din portalul Therapeutica. " +
-                    "Sunt pacientul dumneavoastră, " + utilizator.getNume() + " " + utilizator.getPrenume() + ".";
-
-            // Generăm link-ul prin serviciu
-            String linkWa = whatsappService.genereazaLinkContactPersonalizat(pacient.getMedic().getTelefon(), mesajStart);
-
-            // Punem link-ul în model pentru Thymeleaf
-            model.addAttribute("whatsappLinkMedic", linkWa);
-        }
-
-
-        // Adaugă datele în model
-        model.addAttribute("pacientId", userIdStr);
+        model.addAttribute("pacientId", id.toString());
         model.addAttribute("utilizator", utilizator);
         model.addAttribute("pacient", pacient);
         model.addAttribute("pageTitle", "Profil Pacient");
         model.addAttribute("mode", "view");
 
+        adaugaContactMedic(pacient, utilizator, model);
+
         return "pacient/profil";
     }
 
-    // Afișare formular editare (F6 - pasul 1-2)
     @GetMapping("/{id}/editare")
-    public String formularEditareProfil(@PathVariable String id,
-                                        HttpSession session,
-                                        Model model) {
+    public String formularEditareProfil(
+            @PathVariable UUID id,
+            Model model) {
 
-        String userIdStr = (String) session.getAttribute("userId");
+        var utilizator = accesContService.verificaAccesProfil(
+                id,
+                RoleType.PACIENT
+        );
 
-        UUID userId = UUID.fromString(userIdStr);
+        Pacienti pacient = incarcaPacient(id);
 
-        if (!id.equals(userIdStr)) {
-            return "redirect:/pacient/profil/" + userIdStr + "/editare";
+        ProfilPacientForm formular = new ProfilPacientForm();
+        formular.setNume(utilizator.getNume());
+        formular.setPrenume(utilizator.getPrenume());
+        formular.setEmail(utilizator.getEmail());
+        formular.setCnp(pacient.getCnp());
+        formular.setDataNasterii(pacient.getDataNasterii());
+        formular.setSex(
+                pacient.getSex() == null
+                        ? Sex.NEPRECIZAT
+                        : pacient.getSex()
+        );
+        formular.setInaltime(pacient.getInaltime());
+        formular.setGreutate(pacient.getGreutate());
+        formular.setGrupaSangvina(pacient.getGrupaSangvina());
+
+        model.addAttribute("formular", formular);
+
+        return afiseazaEditare(id, model);
+    }
+
+    @PostMapping("/{id}/salvare")
+    public String salvareProfil(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("formular")
+            ProfilPacientForm formular,
+            BindingResult bindingResult,
+            HttpSession session,
+            RedirectAttributes redirectAttributes,
+            Model model) {
+
+        if (bindingResult.hasErrors()) {
+            accesContService.verificaAccesProfil(
+                    id,
+                    RoleType.PACIENT
+            );
+
+            incarcaPacient(id);
+
+            return afiseazaEditare(id, model);
         }
 
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
+        ProfilPacientService.ProfilSalvat rezultat;
 
-        Optional<Pacienti> pacientOpt = pacientiRepository.findByUserId(userId);
+        try {
+            rezultat = profilPacientService.salveaza(id, formular);
+        } catch (ProfilPacientService.CampProfilInvalidException e) {
+            bindingResult.rejectValue(
+                    e.getCamp(),
+                    "profil." + e.getCamp(),
+                    e.getMessage()
+            );
 
-        model.addAttribute("pacientId", userIdStr);
-        model.addAttribute("utilizator", utilizator);
-        model.addAttribute("pacient", pacientOpt.orElse(new Pacienti()));
-        model.addAttribute("pageTitle", "Editare Profil");
+            return afiseazaEditare(id, model);
+        }
+
+        // Serviciul a revenit după confirmarea tranzacției.
+        session.setAttribute("userNume", rezultat.nume());
+        session.setAttribute("userPrenume", rezultat.prenume());
+        session.setAttribute("userEmail", rezultat.email());
+
+        redirectAttributes.addFlashAttribute(
+                "successMessage",
+                "Profilul medical a fost actualizat cu succes!"
+        );
+
+        return "redirect:/pacient/profil/" + rezultat.userId();
+    }
+
+    private Pacienti incarcaPacient(UUID userId) {
+        return pacientiRepository.findByUserId(userId)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                "Profilul pacientului nu a fost găsit."
+                        )
+                );
+    }
+
+    private String afiseazaEditare(UUID userId, Model model) {
+        model.addAttribute("pacientId", userId.toString());
+        model.addAttribute("pageTitle", "Editare Profil Pacient");
         model.addAttribute("mode", "edit");
+        model.addAttribute("sexe", Sex.values());
+        model.addAttribute(
+                "grupeSangvine",
+                ProfilPacientForm.GRUPE_SANGVINE
+        );
 
         return "pacient/profil";
     }
 
-    // Salvare modificări (F6 - pasul 3-7)
-    @PostMapping("/{id}/salvare")
-    public String salvareProfil(@PathVariable String id,
-                                @RequestParam String nume,
-                                @RequestParam String prenume,
-                                @RequestParam String email,
-                                @RequestParam(required = false) String cnp,
-                                @RequestParam(required = false) String dataNasterii,
-                                @RequestParam(required = false) String sex,
-                                @RequestParam(required = false) Integer inaltime,
-                                @RequestParam(required = false) Double greutate,
-                                @RequestParam(required = false) String grupaSangvina,
-                                HttpSession session,
-                                RedirectAttributes redirectAttributes,
-                                Model model) {
+    private void adaugaContactMedic(
+            Pacienti pacient,
+            Utilizatori utilizator,
+            Model model) {
 
-        String userIdStr = (String) session.getAttribute("userId");
+        var medic = pacient.getMedic();
 
-        UUID userId = UUID.fromString(userIdStr);
-        if (!id.equals(userIdStr)) {
-            return "redirect:/pacient/profil/" + userIdStr + "/editare";
+        if (medic == null || medic.getTelefon() == null) {
+            return;
         }
 
-        // 2. Obținere entități
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
+        String numeMedic = medic.getUser() == null
+                ? ""
+                : medic.getUser().getNume();
 
-        Pacienti pacient = pacientiRepository.findByUserId(userId)
-                .orElse(new Pacienti());
+        String mesaj = "Bună ziua, Dr. " + numeMedic
+                + ". Vă contactez din portalul Therapeutica. "
+                + "Sunt pacientul dumneavoastră, "
+                + utilizator.getNume() + " "
+                + utilizator.getPrenume() + ".";
 
-        // 3. Validări fundamentale
-        boolean hasErrors = false;
-
-        if (nume == null || nume.trim().isEmpty()) {
-            model.addAttribute("numeError", "Numele este obligatoriu");
-            hasErrors = true;
-        }
-        if (prenume == null || prenume.trim().isEmpty()) {
-            model.addAttribute("prenumeError", "Prenumele este obligatoriu");
-            hasErrors = true;
-        }
-        if (email == null || email.trim().isEmpty()) {
-            model.addAttribute("emailError", "Email-ul este obligatoriu");
-            hasErrors = true;
-        } else {
-            String emailRegex = "^[A-Za-z0-9+_.-]+@(.+)$";
-            if (!email.matches(emailRegex)) {
-                model.addAttribute("emailError", "Format email invalid");
-                hasErrors = true;
-            } else {
-                utilizatoriRepository.findByEmail(email).ifPresent(u -> {
-                    if (!u.getId().equals(userId)) {
-                        model.addAttribute("emailError", "Acest email este deja înregistrat");
-                    }
-                });
-                if (model.containsAttribute("emailError")) hasErrors = true;
-            }
-        }
-
-        // 4. Tratare erori (Return la formular)
-        if (hasErrors) {
-            model.addAttribute("pacientId", userIdStr);
-            model.addAttribute("utilizator", utilizator);
-            model.addAttribute("pacient", pacient);
-            model.addAttribute("pageTitle", "Editare Profil");
-            model.addAttribute("mode", "edit");
-            // Păstrăm valorile introduse de user în caz de eroare
-            utilizator.setNume(nume);
-            utilizator.setPrenume(prenume);
-            utilizator.setEmail(email);
-            return "pacient/profil";
-        }
-
-        // 5. Actualizare date Utilizatori
-        utilizator.setNume(nume.trim());
-        utilizator.setPrenume(prenume.trim());
-        utilizator.setEmail(email.trim());
-
-        // 6. Actualizare date Pacienti (Biometrie)
-        pacient.setCnp(cnp != null && !cnp.isEmpty() ? cnp.trim() : null);
-        pacient.setInaltime(inaltime);
-        pacient.setGreutate(greutate);
-        pacient.setGrupaSangvina(grupaSangvina);
-
-        // Conversie Data Nașterii
-        if (dataNasterii != null && !dataNasterii.isEmpty()) {
-            try {
-                pacient.setDataNasterii(java.time.LocalDate.parse(dataNasterii));
-            } catch (java.time.format.DateTimeParseException e) {
-                // Log error sau ignoră dacă formatul e invalid din browser
-            }
-        }
-
-        // Conversie Enum Sex
-        if (sex != null && !sex.isEmpty()) {
-            try {
-                pacient.setSex(com.therapeutica.therapeutica_app.pacienti.Sex.valueOf(sex));
-            } catch (IllegalArgumentException e) {
-                pacient.setSex(com.therapeutica.therapeutica_app.pacienti.Sex.NEPRECIZAT);
-            }
-        }
-
-        // Legătura OneToOne
-        if (pacient.getUser() == null) {
-            pacient.setUser(utilizator);
-        }
-
-        // 7. Persistență
-        utilizatoriRepository.save(utilizator);
-        pacientiRepository.save(pacient);
-
-        // 8. Sync Sesiune
-        session.setAttribute("userNume", utilizator.getNume());
-        session.setAttribute("userPrenume", utilizator.getPrenume());
-        session.setAttribute("userEmail", utilizator.getEmail());
-
-        redirectAttributes.addFlashAttribute("successMessage", "Profilul medical a fost actualizat cu succes!");
-
-        return "redirect:/pacient/profil/" + userIdStr;
+        model.addAttribute(
+                "whatsappLinkMedic",
+                whatsappService.genereazaLinkContactPersonalizat(
+                        medic.getTelefon(),
+                        mesaj
+                )
+        );
     }
 }

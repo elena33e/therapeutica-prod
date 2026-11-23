@@ -2,184 +2,161 @@ package com.therapeutica.therapeutica_app.medici.ui;
 
 import com.therapeutica.therapeutica_app.medici.Medici;
 import com.therapeutica.therapeutica_app.medici.MediciRepository;
-import com.therapeutica.therapeutica_app.utilizatori.Utilizatori;
-import com.therapeutica.therapeutica_app.utilizatori.UtilizatoriRepository;
+import com.therapeutica.therapeutica_app.medici.ProfilMedicForm;
+import com.therapeutica.therapeutica_app.medici.ProfilMedicService;
+import com.therapeutica.therapeutica_app.security.AccesContService;
+import com.therapeutica.therapeutica_app.util.NotFoundException;
+import com.therapeutica.therapeutica_app.utilizatori.RoleType;
 import jakarta.servlet.http.HttpSession;
-import org.springframework.beans.factory.annotation.Autowired;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.propertyeditors.StringTrimmerEditor;
 import org.springframework.stereotype.Controller;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.validation.BindingResult;
+import org.springframework.web.bind.WebDataBinder;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
-import java.util.Optional;
 import java.util.UUID;
 
 @Controller
 @RequestMapping("/medic/profil")
+@RequiredArgsConstructor
 public class MedicProfilController {
 
-    @Autowired
-    private UtilizatoriRepository utilizatoriRepository;
+    private final AccesContService accesContService;
+    private final MediciRepository mediciRepository;
+    private final ProfilMedicService profilMedicService;
 
-    @Autowired
-    private MediciRepository mediciRepository;
+    @InitBinder("formular")
+    public void configureazaFormular(WebDataBinder binder) {
+        binder.setAllowedFields(
+                "nume",
+                "prenume",
+                "email",
+                "specializare",
+                "telefon"
+        );
 
-    // Vizualizare profil medic
+        binder.registerCustomEditor(
+                String.class,
+                new StringTrimmerEditor(false)
+        );
+    }
+
     @GetMapping("/{id}")
-    public String vizualizareProfil(@PathVariable String id,
-                                    HttpSession session,
-                                    Model model) {
+    public String vizualizareProfil(
+            @PathVariable UUID id,
+            Model model) {
 
-        String userIdStr = (String) session.getAttribute("userId");
-        String userRole = (String) session.getAttribute("userRole");
+        var utilizator = accesContService.verificaAccesProfil(
+                id,
+                RoleType.MEDIC
+        );
 
-        if (userIdStr == null || userRole == null || !userRole.equals("MEDIC")) {
-            return "redirect:/login";
-        }
+        Medici medic = incarcaMedic(id);
 
-        UUID userId = UUID.fromString(userIdStr);
-
-        if (!id.equals(userIdStr)) {
-            return "redirect:/medic/profil/" + userIdStr;
-        }
-
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
-
-        Optional<Medici> medicOpt = mediciRepository.findByUserId(userId);
-
-        model.addAttribute("medicId", userIdStr);
+        model.addAttribute("medicId", id.toString());
         model.addAttribute("utilizator", utilizator);
-        model.addAttribute("medic", medicOpt.orElse(null));
+        model.addAttribute("medic", medic);
         model.addAttribute("pageTitle", "Profil Medic");
         model.addAttribute("mode", "view");
 
         return "medic/profil";
     }
 
-    // Afișare formular editare
     @GetMapping("/{id}/editare")
-    public String formularEditareProfil(@PathVariable String id,
-                                        HttpSession session,
-                                        Model model) {
+    public String formularEditareProfil(
+            @PathVariable UUID id,
+            Model model) {
 
-        String userIdStr = (String) session.getAttribute("userId");
-        String userRole = (String) session.getAttribute("userRole");
+        var utilizator = accesContService.verificaAccesProfil(
+                id,
+                RoleType.MEDIC
+        );
 
-        if (userIdStr == null || userRole == null || !userRole.equals("MEDIC")) {
-            return "redirect:/login";
+        Medici medic = incarcaMedic(id);
+
+        ProfilMedicForm formular = new ProfilMedicForm();
+        formular.setNume(utilizator.getNume());
+        formular.setPrenume(utilizator.getPrenume());
+        formular.setEmail(utilizator.getEmail());
+        formular.setSpecializare(medic.getSpecializare());
+        formular.setTelefon(medic.getTelefon());
+
+        model.addAttribute("formular", formular);
+
+        return afiseazaEditare(id, model);
+    }
+
+    @PostMapping("/{id}/salvare")
+    public String salvareProfil(
+            @PathVariable UUID id,
+            @Valid @ModelAttribute("formular")
+            ProfilMedicForm formular,
+            BindingResult bindingResult,
+            HttpSession session,
+            RedirectAttributes redirectAttributes,
+            Model model) {
+
+        if (bindingResult.hasErrors()) {
+            accesContService.verificaAccesProfil(
+                    id,
+                    RoleType.MEDIC
+            );
+
+            incarcaMedic(id);
+
+            return afiseazaEditare(id, model);
         }
 
-        UUID userId = UUID.fromString(userIdStr);
+        ProfilMedicService.ProfilSalvat rezultat;
 
-        if (!id.equals(userIdStr)) {
-            return "redirect:/medic/profil/" + userIdStr + "/editare";
+        try {
+            rezultat = profilMedicService.salveaza(id, formular);
+        } catch (ProfilMedicService.EmailDejaFolositException e) {
+            bindingResult.rejectValue(
+                    "email",
+                    "email.dejaFolosit",
+                    e.getMessage()
+            );
+
+            return afiseazaEditare(id, model);
         }
 
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
+        // Serviciul a revenit după confirmarea tranzacției.
+        session.setAttribute("userNume", rezultat.nume());
+        session.setAttribute("userPrenume", rezultat.prenume());
+        session.setAttribute("userEmail", rezultat.email());
 
-        Optional<Medici> medicOpt = mediciRepository.findByUserId(userId);
+        redirectAttributes.addFlashAttribute(
+                "successMessage",
+                "Profilul a fost actualizat!"
+        );
 
-        model.addAttribute("medicId", userIdStr);
-        model.addAttribute("utilizator", utilizator);
-        model.addAttribute("medic", medicOpt.orElse(new Medici()));
+        return "redirect:/medic/profil/" + rezultat.userId();
+    }
+
+    private Medici incarcaMedic(UUID userId) {
+        return mediciRepository.findByUserId(userId)
+                .orElseThrow(() ->
+                        new NotFoundException(
+                                "Profilul medicului nu a fost găsit."
+                        )
+                );
+    }
+
+    private String afiseazaEditare(UUID userId, Model model) {
+        model.addAttribute("medicId", userId.toString());
         model.addAttribute("pageTitle", "Editare Profil Medic");
         model.addAttribute("mode", "edit");
 
         return "medic/profil";
-    }
-
-    @Transactional // Esențial: ori se salvează ambele, ori niciuna
-    @PostMapping("/{id}/salvare")
-    public String salvareProfil(@PathVariable String id,
-                                @RequestParam String nume,
-                                @RequestParam String prenume,
-                                @RequestParam String email,
-                                @RequestParam(required = false) String specializare,
-                                @RequestParam(required = false) String telefon, // 1. Adăugat parametrul telefon
-                                HttpSession session,
-                                RedirectAttributes redirectAttributes,
-                                Model model) {
-
-        String userIdStr = (String) session.getAttribute("userId");
-        String userRole = (String) session.getAttribute("userRole");
-
-        // 1. Securitate: Verifică dacă user-ul are dreptul să facă asta
-        if (userIdStr == null || !userRole.equals("MEDIC") || !id.equals(userIdStr)) {
-            return "redirect:/login";
-        }
-
-        UUID userId = UUID.fromString(userIdStr);
-
-        // 2. Obține entitățile existente
-        Utilizatori utilizator = utilizatoriRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Utilizatorul nu a fost găsit"));
-
-        Medici medic = mediciRepository.findByUserId(userId)
-                .orElseGet(() -> {
-                    Medici m = new Medici();
-                    m.setUser(utilizator);
-                    return m;
-                });
-
-        // 3. Validare manuală
-        boolean hasErrors = false;
-
-        if (nume == null || nume.trim().isEmpty()) {
-            model.addAttribute("numeError", "Numele este obligatoriu");
-            hasErrors = true;
-        }
-        if (prenume == null || prenume.trim().isEmpty()) {
-            model.addAttribute("prenumeError", "Prenumele este obligatoriu");
-            hasErrors = true;
-        }
-
-        // Validare email
-        if (email == null || email.trim().isEmpty()) {
-            model.addAttribute("emailError", "Email-ul este obligatoriu");
-            hasErrors = true;
-        } else {
-            Optional<Utilizatori> existent = utilizatoriRepository.findByEmail(email.trim());
-            if (existent.isPresent() && !existent.get().getId().equals(userId)) {
-                model.addAttribute("emailError", "Acest email este deja utilizat de alt cont");
-                hasErrors = true;
-            }
-        }
-
-        // 4. Tratare Erori: Reafișăm formularul cu datele "murdare" (ce a scris userul)
-        if (hasErrors) {
-            utilizator.setNume(nume);
-            utilizator.setPrenume(prenume);
-            utilizator.setEmail(email);
-            medic.setSpecializare(specializare);
-            medic.setTelefon(telefon); // 2. Păstrăm telefonul introdus în caz de eroare
-
-            model.addAttribute("medicId", userIdStr);
-            model.addAttribute("utilizator", utilizator);
-            model.addAttribute("medic", medic);
-            model.addAttribute("mode", "edit");
-            model.addAttribute("pageTitle", "Editare Profil Medic");
-            return "medic/profil";
-        }
-
-        // 5. Salvare date
-        utilizator.setNume(nume.trim());
-        utilizator.setPrenume(prenume.trim());
-        utilizator.setEmail(email.trim().toLowerCase());
-        utilizatoriRepository.save(utilizator);
-
-        medic.setSpecializare(specializare != null ? specializare.trim() : null);
-        medic.setTelefon(telefon != null && !telefon.trim().isEmpty() ? telefon.trim() : null); // 3. Salvăm telefonul curățat
-        mediciRepository.save(medic);
-
-        // 6. Actualizare Sesiune (Să se schimbe numele în header imediat)
-        session.setAttribute("userNume", utilizator.getNume());
-        session.setAttribute("userPrenume", utilizator.getPrenume());
-
-        // 7. Finalizare
-        redirectAttributes.addFlashAttribute("successMessage", "Profilul a fost actualizat!");
-        return "redirect:/medic/profil/" + userIdStr;
     }
 }

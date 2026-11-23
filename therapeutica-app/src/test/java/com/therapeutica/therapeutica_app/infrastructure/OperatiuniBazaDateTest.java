@@ -182,6 +182,7 @@ class OperatiuniBazaDateTest {
                 baza,
                 postgres.getUsername(),
                 postgres.getPassword(),
+                "3",
                 "classpath:db/migration"
         );
 
@@ -273,7 +274,7 @@ class OperatiuniBazaDateTest {
         }
 
         Files.writeString(
-                migrariViitoare.resolve("V4__proba_migrari.sql"),
+                migrariViitoare.resolve("V5__proba_migrari.sql"),
                 """
                 CREATE TABLE public.proba_migrari (
                     id integer PRIMARY KEY
@@ -285,11 +286,12 @@ class OperatiuniBazaDateTest {
                 baza,
                 ROL_MIGRARI,
                 PAROLA_MIGRARI,
+                "latest",
                 "classpath:db/migration",
                 "filesystem:" + migrariViitoare
         );
 
-        assertEquals(1, actualizare.migrate().migrationsExecuted);
+        assertEquals(2, actualizare.migrate().migrationsExecuted);
         actualizare.validate();
         assertEquals(0, actualizare.migrate().migrationsExecuted);
 
@@ -550,13 +552,17 @@ class OperatiuniBazaDateTest {
     }
 
     private static Flyway flyway(
-            String baza, String utilizator,
-            String parola, String... locatii
+            String baza,
+            String utilizator,
+            String parola,
+            String tinta,
+            String... locatii
     ) {
         return Flyway.configure()
                 .dataSource(url(baza), utilizator, parola)
                 .locations(locatii)
                 .defaultSchema("public")
+                .target(tinta)
                 .baselineVersion("3")
                 .baselineOnMigrate(false)
                 .cleanDisabled(true)

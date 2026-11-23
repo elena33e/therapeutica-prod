@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
+import com.therapeutica.therapeutica_app.util.CnpValidator;
 
 @Service
 @RequiredArgsConstructor
@@ -50,7 +51,7 @@ public class InregistrareService {
 
         String cnp = text(request.getCnp());
 
-        if (codPrimit.isEmpty() || !cnp.matches("[0-9]{13}")) {
+        if (codPrimit.isEmpty() || !CnpValidator.esteValid(cnp)) {
             return eroare("Verifică codul de înregistrare și CNP-ul.");
         }
 
